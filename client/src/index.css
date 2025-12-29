@@ -24,6 +24,42 @@ main {
   gap: 24px;
 }
 
+.join {
+  background: rgba(255, 255, 255, 0.75);
+  border: 2px solid #b48d53;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 32px rgba(47, 36, 21, 0.15);
+  display: grid;
+  gap: 12px;
+}
+
+.join label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.join input {
+  border: 1px solid #b48d53;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.join-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.error {
+  margin: 0;
+  color: #7a2e1a;
+  font-weight: 600;
+}
+
 .board {
   background: rgba(255, 255, 255, 0.75);
   border: 2px solid #b48d53;
@@ -84,6 +120,10 @@ button {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.hand button + button {
+  margin-left: 8px;
 }
 
 .players ul {

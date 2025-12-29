@@ -1,4 +1,4 @@
-import { INVALID_MOVE } from "boardgame.io/core";
+import { INVALID_MOVE, TurnOrder } from "boardgame.io/core";
 import type { Game } from "boardgame.io";
 
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
@@ -28,6 +28,7 @@ export interface SimpleCardGameState {
   hands: Record<string, Card | null>;
   winner: string | "tie" | null;
   revealed: boolean;
+  playOrder: string[];
 }
 
 const suits: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
@@ -85,16 +86,23 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
     for (let i = 0; i < ctx.numPlayers; i += 1) {
       hands[String(i)] = null;
     }
+    const playOrder = random.Shuffle(
+      Array.from({ length: ctx.numPlayers }, (_, index) => String(index))
+    );
 
     return {
       deck,
       hands,
       winner: null,
       revealed: false,
+      playOrder,
     };
   },
+  turn: {
+    order: TurnOrder.CUSTOM_FROM("playOrder"),
+  },
   moves: {
-    drawCard: ({ G, playerID }) => {
+    drawCard: ({ G, playerID, events }) => {
       if (!playerID) return INVALID_MOVE;
       if (G.hands[playerID]) return INVALID_MOVE;
 
@@ -108,7 +116,30 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
       if (allDrawn) {
         G.revealed = true;
         G.winner = computeWinner(G.hands);
+      } else {
+        events.endTurn();
       }
+
+      return G;
+    },
+    restartGame: ({ G, ctx, random, events }) => {
+      if (!G.revealed) return INVALID_MOVE;
+
+      const deck = random.Shuffle(createDeck());
+      const hands: Record<string, Card | null> = {};
+      for (let i = 0; i < ctx.numPlayers; i += 1) {
+        hands[String(i)] = null;
+      }
+
+      G.deck = deck;
+      G.hands = hands;
+      G.winner = null;
+      G.revealed = false;
+      G.playOrder = random.Shuffle(
+        Array.from({ length: ctx.numPlayers }, (_, index) => String(index))
+      );
+
+      events.endTurn({ next: G.playOrder[0] });
 
       return G;
     },

@@ -26,8 +26,9 @@ test("drawCard assigns cards and sets winner once all drawn", () => {
   const drawCard = SimpleCardGame.moves?.drawCard;
 
   assert.ok(drawCard);
-  drawCard({ G: state, playerID: "0" } as any);
-  drawCard({ G: state, playerID: "1" } as any);
+  const events = { endTurn: () => {} };
+  drawCard({ G: state, playerID: "0", events } as any);
+  drawCard({ G: state, playerID: "1", events } as any);
 
   assert.ok(state.hands["0"]);
   assert.ok(state.hands["1"]);

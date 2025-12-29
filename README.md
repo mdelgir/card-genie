@@ -8,6 +8,8 @@ Multiplayer card game MVP scaffold using Node.js, TypeScript, boardgame.io, and 
 - `games` Shared game logic
 
 ## Quick start
+Prerequisites: Node.js 18+ and npm.
+
 1) Install dependencies
 
 ```bash
