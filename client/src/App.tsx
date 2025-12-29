@@ -2,12 +2,13 @@ import { Client } from "boardgame.io/react";
 import { SocketIO } from "boardgame.io/multiplayer";
 import { LobbyClient } from "boardgame.io/client";
 import type { Ctx } from "boardgame.io";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SimpleCardGame,
   SimpleCardGameState,
   type Card,
 } from "@games/simple-card-game";
+import QRCode from "qrcode";
 
 const serverUrl =
   import.meta.env.VITE_SERVER_URL ??
@@ -108,8 +109,24 @@ export default function App() {
   const [playerCredentials, setPlayerCredentials] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [roomQr, setRoomQr] = useState<string | null>(null);
   const gameName = SimpleCardGame.name ?? "simple-card-game";
   const lobbyClient = useMemo(() => new LobbyClient({ server: serverUrl }), []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get("room");
+    if (room) {
+      setMatchID(room);
+    }
+  }, []);
+
+  useEffect(() => {
+    const roomUrl = `${window.location.origin}/?room=${encodeURIComponent(matchID)}`;
+    QRCode.toDataURL(roomUrl, { margin: 1, width: 220 })
+      .then(setRoomQr)
+      .catch(() => setRoomQr(null));
+  }, [matchID]);
 
   const createRoom = async () => {
     setError(null);
@@ -211,6 +228,12 @@ export default function App() {
                 Join game
               </button>
             </div>
+            {roomQr && (
+              <div className="qr">
+                <img src={roomQr} alt={`Room ${matchID} QR`} />
+                <span>Scan to join this room</span>
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
           </section>
         )}
