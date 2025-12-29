@@ -9,10 +9,14 @@ import {
   type Card,
 } from "@games/simple-card-game";
 
+const serverUrl =
+  import.meta.env.VITE_SERVER_URL ??
+  `${window.location.protocol}//${window.location.hostname}:8000`;
+
 const GameClient = Client({
   game: SimpleCardGame,
   board: Board,
-  multiplayer: SocketIO({ server: "http://localhost:8000" }),
+  multiplayer: SocketIO({ server: serverUrl }),
 });
 
 type BoardProps = {
@@ -105,10 +109,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const gameName = SimpleCardGame.name ?? "simple-card-game";
-  const lobbyClient = useMemo(
-    () => new LobbyClient({ server: "http://localhost:8000" }),
-    []
-  );
+  const lobbyClient = useMemo(() => new LobbyClient({ server: serverUrl }), []);
 
   const createRoom = async () => {
     setError(null);
