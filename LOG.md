@@ -1,6 +1,6 @@
 # Progress Log
 
-## 2025-03-08
+## 2025-12-29
 
 - Scaffolded monorepo with `client`, `server`, and `games` folders plus root workspaces.
 - Implemented `SimpleCardGame` with a shuffled 52-card deck, per-player hands, winner detection, and masked hands.
