@@ -1,0 +1,38 @@
+Create a monorepo project for a multiplayer card game platform using Node.js and TypeScript.
+
+**Goals:**
+- Support multiplayer card games based on a standard 52-card deck.
+- Users can join a game room using a shared code.
+- Each player sees their own hand of cards on their device.
+- A shared “table view” shows public game state, intended for a tablet or TV.
+- Build this as an MVP with clean scaffolding and simple demo logic.
+
+**Tech Stack:**
+- Backend:
+  - Node.js
+  - TypeScript
+  - boardgame.io for game logic and state synchronization
+- Frontend:
+  - React + TypeScript using Vite
+  - boardgame.io/react for client integration
+- Real-time communication:
+  - WebSockets (use boardgame.io’s built-in support)
+
+**Folder Structure:**
+- /client → React + Vite frontend
+- /server → Node.js + boardgame.io backend
+- /games  → Contains modular game logic
+
+**Functionality to include:**
+- A simple demo card game where each player draws one card from a shuffled 52-card deck and the highest card wins.
+- boardgame.io Game definition in /games/simple-card-game.ts
+- Game server that exposes the game via boardgame.io’s server() function and runs on port 8000
+- React client with a `Client` wrapper from boardgame.io/react, hardcoded to player 0 for now
+- Instructions in README.md for how to start the server and frontend
+
+**Dev Environment:**
+- TypeScript support in both frontend and backend
+- Use `ts-node` in the backend
+- Vite for fast frontend builds
+
+Deliver working code in the expected folder structure with package.json files where needed.

@@ -1,0 +1,108 @@
+:root {
+  color-scheme: light;
+  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  background: radial-gradient(circle at top, #f7f1e1 0%, #e8d9bd 55%, #d2c0a1 100%);
+  color: #2f2415;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app {
+  padding: 32px;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.board {
+  background: rgba(255, 255, 255, 0.75);
+  border: 2px solid #b48d53;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 32px rgba(47, 36, 21, 0.15);
+}
+
+.board.table {
+  background: rgba(238, 227, 205, 0.85);
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+.status {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.deck {
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.hand {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px dashed #b48d53;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.card {
+  font-size: 1.1rem;
+  margin: 8px 0 12px;
+}
+
+button {
+  border: none;
+  background: #3f2b1b;
+  color: #f8f2e4;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.players ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.players li {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(63, 43, 27, 0.15);
+}
+
+.players li:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 20px;
+  }
+}
