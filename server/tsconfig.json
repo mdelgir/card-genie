@@ -3,11 +3,18 @@
     "target": "ES2019",
     "module": "commonjs",
     "moduleResolution": "node",
-    "rootDir": "src",
+    "rootDir": "..",
     "outDir": "dist",
     "esModuleInterop": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmitOnError": true
   },
-  "include": ["src", "../games/**/*.ts"]
+  "include": [
+    "src",
+    "../games/**/*.ts"
+  ],
+  "exclude": [
+    "../games/**/*.test.ts"
+  ]
 }

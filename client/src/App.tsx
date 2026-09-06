@@ -1,114 +1,30 @@
+import { serverUrl } from "./config";
 import { Client } from "boardgame.io/react";
 import { SocketIO } from "boardgame.io/multiplayer";
 import { LobbyClient } from "boardgame.io/client";
-import type { Ctx } from "boardgame.io";
 import { useEffect, useMemo, useState } from "react";
-import {
-  SimpleCardGame,
-  SimpleCardGameState,
-  type Card,
-} from "@games/simple-card-game";
+import { SimpleCardGame } from "@games/simple-card-game";
 import QRCode from "qrcode";
+import { GameBoard } from "./GameBoard";
+import { useRoomSeats } from "./WaitingRoom";
 
-const serverUrl =
-  import.meta.env.VITE_SERVER_URL ??
-  `${window.location.protocol}//${window.location.hostname}:8000`;
 
 const GameClient = Client({
   game: SimpleCardGame,
-  board: Board,
+  board: GameBoard,
   multiplayer: SocketIO({ server: serverUrl }),
 });
 
-type BoardProps = {
-  G: SimpleCardGameState;
-  ctx: Ctx;
-  moves: {
-    drawCard: () => void;
-    restartGame: () => void;
-  };
-  matchData?: Array<{ id: number; name?: string }>;
-  playerID?: string;
-  isActive: boolean;
-};
-
-function formatCard(card: Card | null) {
-  if (!card) return "No card";
-  const suitLabel = card.suit.charAt(0).toUpperCase() + card.suit.slice(1);
-  return `${card.rank} of ${suitLabel}`;
-}
-
-function Board({ G, ctx, moves, matchData, playerID }: BoardProps) {
-  const isTableView = !playerID;
-  const playerCard = playerID ? G.hands[playerID] : null;
-  const currentPlayer = ctx.currentPlayer;
-  const isPlayerTurn = playerID !== undefined && playerID === currentPlayer && !G.revealed;
-  const canDraw = isPlayerTurn && !playerCard;
-  const displayName = (id: string) =>
-    matchData?.find((player) => String(player.id) === id)?.name ?? `Player ${id}`;
-
-  return (
-    <div className={isTableView ? "board table" : "board"}>
-      <header>
-        <h2>{isTableView ? "Table View" : displayName(playerID ?? "")}</h2>
-        <p className="status">
-          {G.revealed
-            ? G.winner === "tie"
-              ? "Result: Tie"
-              : `Winner: ${displayName(G.winner)}`
-            : isTableView
-              ? `Current turn: ${displayName(currentPlayer)}`
-              : isPlayerTurn
-                ? "Your turn to draw"
-                : `Waiting for ${displayName(currentPlayer)}`}
-        </p>
-      </header>
-
-      <section className="deck">
-        <div>Cards remaining: {G.deck.length}</div>
-      </section>
-
-      {!isTableView && (
-        <section className="hand">
-          <h3>Your card</h3>
-          <div className="card">{formatCard(playerCard)}</div>
-          <button type="button" onClick={() => moves.drawCard()} disabled={!canDraw}>
-            Draw card
-          </button>
-          {G.revealed && (
-            <button type="button" onClick={() => moves.restartGame()}>
-              Play again
-            </button>
-          )}
-        </section>
-      )}
-
-      <section className="players">
-        <h3>Players</h3>
-        <ul>
-          {Object.entries(G.hands).map(([id, card]) => {
-            const hasDrawn = Boolean(card);
-            return (
-              <li key={id}>
-                {displayName(id)}: {hasDrawn ? formatCard(card) : "Waiting"}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-    </div>
-  );
-}
-
 export default function App() {
-  // Hello World!
-  const [playerID, setPlayerID] = useState("0");
+  const [playerID, setPlayerID] = useState("");
   const [playerName, setPlayerName] = useState("Player");
-  const [matchID, setMatchID] = useState("room-1");
+  const [matchID, setMatchID] = useState("");
   const [numPlayers, setNumPlayers] = useState(2);
   const [playerCredentials, setPlayerCredentials] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { seats, error: seatsError } = useRoomSeats(serverUrl, joined ? "" : matchID);
   const [roomQr, setRoomQr] = useState<string | null>(null);
   const gameName = SimpleCardGame.name ?? "simple-card-game";
   const lobbyClient = useMemo(() => new LobbyClient({ server: serverUrl }), []);
@@ -131,24 +47,32 @@ export default function App() {
   const createRoom = async () => {
     setError(null);
     try {
-      const result = await lobbyClient.createMatch(gameName, {
-        numPlayers,
+      setBusy(true);
+      const response = await fetch(`${serverUrl}/games/${gameName}/create`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numPlayers, setupData: { hostName: playerName.trim() } }),
       });
+      if (!response.ok) throw new Error(await response.text());
+      const result = await response.json();
       setMatchID(result.matchID);
+      setPlayerID(result.playerID);
+      setPlayerCredentials(result.playerCredentials);
+      setJoined(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create room.";
       setError(message);
-    }
+    } finally { setBusy(false); }
   };
 
   const joinRoom = async () => {
     setError(null);
     try {
+      setBusy(true);
       const match = await lobbyClient.getMatch(gameName, matchID);
       const maxPlayers = match.players.length;
       const numericID = Number(playerID);
 
-      if (Number.isNaN(numericID) || numericID < 0 || numericID >= maxPlayers) {
+      if (!Number.isInteger(numericID) || numericID < 0 || numericID >= maxPlayers) {
         setError(`Player ID must be between 0 and ${maxPlayers - 1}.`);
         return;
       }
@@ -177,6 +101,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <header className="app-masthead"><div className="wordmark"><span aria-hidden="true">♠</span> Card Genie</div><p>A little luck. A great night.</p></header>
       <main>
         {!joined && (
           <section className="join">
@@ -198,12 +123,13 @@ export default function App() {
               />
             </label>
             <label htmlFor="player">
-              Player ID
-              <input
-                id="player"
-                value={playerID}
-                onChange={(event) => setPlayerID(event.target.value)}
-              />
+              Player seat
+              <select id="player" value={playerID} onChange={(event) => setPlayerID(event.target.value)}>
+                <option value="">Choose an available seat</option>
+                {seats.map(seat => <option key={seat.id} value={String(seat.id)} disabled={Boolean(seat.name)}>
+                  Seat {seat.id + 1}: {seat.name || "Available"}
+                </option>)}
+              </select>
             </label>
             <label htmlFor="numPlayers">
               Number of players
@@ -217,27 +143,29 @@ export default function App() {
               />
             </label>
             <div className="join-actions">
-              <button type="button" onClick={createRoom} disabled={numPlayers < 2}>
+              <button type="button" onClick={createRoom} disabled={busy || !playerName.trim() || !Number.isInteger(numPlayers) || numPlayers < 2 || numPlayers > 8}>
                 Create room
               </button>
               <button
                 type="button"
                 onClick={joinRoom}
-                disabled={!playerID || !playerName || !matchID}
+                disabled={busy || !playerID || !playerName.trim() || !matchID || !seats.some(seat => String(seat.id) === playerID && !seat.name)}
               >
                 Join game
               </button>
             </div>
-            {roomQr && (
+            {matchID && roomQr && (
               <div className="qr">
                 <img src={roomQr} alt={`Room ${matchID} QR`} />
                 <span>Scan to join this room</span>
               </div>
             )}
-            {error && <p className="error">{error}</p>}
+            {(error || seatsError) && <p className="error">{error || seatsError}</p>}
           </section>
         )}
 
+        {joined && <section className="join room-share"><p>Room: <strong>{matchID}</strong> — <a href={`/?room=${encodeURIComponent(matchID)}`}>Join link</a></p>
+          {roomQr && <div className="qr"><img src={roomQr} alt="Scan to join this room" /></div>}</section>}
         {joined && (
           <GameClient
             playerID={playerID}

@@ -1,15 +1,3 @@
-import { Server } from "boardgame.io/server";
-import { SimpleCardGame } from "../../games/simple-card-game";
+import { createCardGenieServer } from "./room-server";
 
-const devOrigins = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-  // Dev-only: allow all origins so phones on LAN can connect.
-  callback(null, true);
-};
-
-const server = Server({
-  games: [SimpleCardGame],
-  origins: devOrigins,
-  apiOrigins: devOrigins,
-});
-
-server.run(8000);
+createCardGenieServer().run(8000);

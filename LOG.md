@@ -12,3 +12,28 @@
 - Added a basic node:test suite for the game logic.
 - Updated README with prerequisites and run steps.
 - Pinned `boardgame.io` version and added workspace overrides to avoid peer conflicts.
+
+## 2026-09-06
+
+- Closed private-state leaks: every client receives an empty deck, only a player’s own card is visible before reveal, and spectators receive public progress only.
+- Added public deck counts and draw-status indicators; draw and replay use boardgame.io server-only moves.
+- Added a SocketIO guard for boardgame.io 0.50.2's unfiltered initial-state sync snapshot, removing historical private cards and random-plugin state without changing authoritative storage.
+- Expanded regression coverage to nine tests, including real SocketIO connections for authenticated players, spectators, late joins, reveal, and replay. All pass; changed game/test/transport files also pass a standalone strict TypeScript check.
+- Existing server rootDir and client typing build failures remain. Build validation ran in an isolated copy; all nine tests also pass in the original checkout. The existing package-lock.json modification is preserved.
+
+## 2026-09-06 — Build repair and project records
+
+- Repaired server compilation boundaries/start path and client type errors; isolated generated Vite config output.
+- Added goals.md and ledger.md, linked from README. Use ledger.md for current progress and validation; keep this file as historical context.
+
+- Build repair validated in the checkout: both production builds and all nine tests pass; compiled server and built-client preview respond successfully. See ledger.md for the remaining sandbox-specific development optimizer limitation.
+
+## 2026-09-06 — Waiting room and start
+
+- Added host reservation, public seat selection/occupancy, and an authenticated start endpoint backed by boardgame.io phases and synchronization.
+- Blocked premature actions and raw lifecycle bypasses; all eleven tests and both builds pass. Verified create/join/start/private draw/winner in two browser tabs.
+- Development mode now works with the updated session permissions. See ledger.md for current progress and remaining work.
+
+## 2026-09-06 — Graphical cards
+
+- Added SVG card faces/backs, reusable card and board components, green felt surfaces, responsive layouts, and winner emphasis. Verified desktop/mobile appearance and hidden-card labels; see ledger.md for validation.
