@@ -8,14 +8,14 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | --- | --- | --- |
 | Room creation and joining | Verified locally | Creator automatically occupies host seat; joiners select an available seat; names, credentials, room codes, and QR sharing retained. |
 | Waiting room and start | Verified | Host-only start checks occupied seats on the server; no shuffle/draw before start; synchronized transition tested over SocketIO and in two browser tabs. |
-| Deck and demo rules | Implemented | Standard 52-card deck, shuffle, initial randomized turns, one-card draws, highest-card winner/tie. Initial dealing is not a separate step yet. |
+| Deck and demo rules | Implemented | Standard 52-card deck, shuffle, randomized turn order, explicit one-card draw per player, highest-card winner/tie. The explicit draw is intentionally the Phase 1 demo's deal mechanic; no separate automatic initial deal is required. |
 | Player and spectator privacy | Verified in automated tests | Private deck excluded; own hand only before reveal; public draw status; initial-sync guard removes historical secrets and random state. |
 | Synchronization | Verified locally | Authenticated SocketIO players, spectator/late join, draw, reveal, winner, and replay covered. |
 | Independent table entry | Verified locally | `/?table=<matchID>` opens a credential-less public table without consuming a seat. Player pages mount only their own board. |
 | Round completion and replay | Verified locally | Explicit waiting/playing/complete status; final-draw/current player alone may replay. Fresh deck, cleared private state, and refreshed full turn order verified. |
 | Card graphics | Verified visually | All 52 SVG faces, patterned backs, card slots, deck stack, and winner emphasis; desktop/mobile browser checks and private-card labels verified. |
 | Builds | Verified | Both production builds pass; compiled server responds to /games; built client preview returns HTTP 200. |
-| Device / hosted validation | Partial | Two browser tabs and their table views verified locally. Physical phones, TV/tablet layout, LAN reachability, and hosted end-to-end use remain unverified. |
+| Device / hosted validation | Partial | Local multi-tab/browser validation is complete. Physical phones, TV/tablet layout, LAN reachability, and hosted end-to-end use remain unverified. |
 
 ## 2025-12-29 — Existing foundation
 
@@ -64,8 +64,9 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 
 ## Next priorities
 
-1. Clarify whether Phase 1 needs an initial deal separate from the retained one-card draw action.
-2. Expand rule/authorization tests and verify the complete flow on physical LAN devices and a hosted server.
+1. Manually verify the complete flow on physical LAN devices: development PC + at least two player phones + a separate public-table device.
+2. Validate the equivalent complete flow against a hosted server/client configuration.
+3. After both validations pass and the ledger is updated, declare Phase 1 complete and begin Phase 2A (`GameDefinition v0`).
 
 ## Known limitations
 
@@ -96,3 +97,10 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - Validation: both production builds and all 13 tests pass. Coverage includes deterministic winner/tie completion, rejected premature replay and post-completion draws, raw SocketIO unauthorized player/spectator replay attempts, a fresh unique 52-card server deck, cleared round state, and valid synchronized turn ownership. A seeded three-player test verifies changed full turn sequences over repeated rounds. Player/table current-state and reconnect privacy remain verified after a next-round draw, including empty deck payloads, filtered initial history, undo/redo, and random state.
 - Three browser tabs verified host/guest/table completion with the same winner, replay available only to the final-draw guest, a waiting message for the host, no table actions, cleared cards/winner and 52-card count after replay, a changed first player, and the next legal private draw synchronized as a face-down card on the table.
 - Existing sessions from before this state-schema change are not migrated; restart the server and create fresh rooms when updating. If the replay-authorized player loses credentials or leaves, recovery/host transfer remains unavailable. Physical LAN/hosted checks and the existing join UX issue remain pending. No initial-deal redesign or later roadmap work was undertaken.
+
+## 2026-09-06 — Phase 1 deal semantics decision
+
+- Highest Card will retain the explicit per-turn one-card draw. There is no separate automatic initial deal in the Phase 1 demo.
+- The draw itself is the demo's deal mechanic and intentionally exercises authoritative turn ownership, private-card delivery, public draw progress, real-time synchronization, and reveal/winner behavior.
+- This is a product/rule decision, not an implementation gap. No code change is required for Phase 1.
+- Future configurable games may choose automatic setup dealing as part of `GameDefinition`; this decision does not constrain Phase 2 rule design.
