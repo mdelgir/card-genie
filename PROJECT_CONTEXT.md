@@ -4,13 +4,13 @@
 
 Card Genie is a multiplayer platform for games played with a standard 52-card deck.
 
-The long-term goal is to let users add their own games by defining the number of players and the game rules, while the platform handles multiplayer state, card visibility, turns, and presentation.
+The long-term goal is to let users add their own games by defining the number of players and the game rules, while the platform handles multiplayer state, card visibility, turns, synchronization, and presentation.
 
 A core use case is an in-person game night:
 
 - Each player uses their own phone as a private hand/controller.
-- A nearby TV or tablet can act as the shared table.
-- The same system should also support fully online play.
+- A nearby TV or tablet acts as the shared public table.
+- The same system also supports fully online play.
 
 The product should eventually support web, mobile, tablet, and TV form factors.
 
@@ -23,15 +23,17 @@ Phase 1 should prove that the architecture can support:
 1. Create a room.
 2. Join the room from multiple devices.
 3. Assign player seats / identities.
-4. Start a game.
+4. Start a game through an authoritative lifecycle.
 5. Create and shuffle a standard 52-card deck.
-6. Deal private cards to players.
-7. Show public game state on a shared table view.
-8. Allow at least one simple game move.
+6. Deal or draw private cards according to the demo rules.
+7. Show public game state on an independently accessible shared table view.
+8. Allow at least one legal player action and reject illegal actions authoritatively.
 9. Synchronize state in real time across all connected devices.
-10. Complete a simple demo game end-to-end.
+10. Reach an explicit completed-round winner/tie state.
+11. Replay/reset with consistent permissions and fresh private state.
+12. Verify the complete flow on physical LAN devices and in a hosted configuration.
 
-User-defined game rules are a later phase and should not drive unnecessary complexity into the Phase 1 implementation.
+User-defined game rules are a later phase and should not drive unnecessary complexity into Phase 1.
 
 ## Chosen technology stack
 
@@ -40,17 +42,20 @@ The chosen stack is:
 - TypeScript throughout.
 - Node.js backend.
 - `boardgame.io` for game state, moves, turn flow, multiplayer synchronization, and player-specific state filtering.
-- WebSocket-based real-time multiplayer through boardgame.io's multiplayer transport.
+- WebSocket-based real-time multiplayer through boardgame.io's SocketIO transport.
 - React + TypeScript + Vite for the frontend.
-- Monorepo layout with shared game definitions.
+- npm workspaces with shared game definitions.
 
-Current repository layout:
+Repository layout:
 
 - `client/` — React + Vite frontend.
 - `server/` — Node.js + boardgame.io backend.
 - `games/` — shared / modular game logic.
+- `goals.md` — target outcomes and acceptance criteria.
+- `ledger.md` — current verified progress and next priorities.
+- `LOG.md` — historical development log.
 
-The repository currently pins `boardgame.io` to 0.50.2. Do not casually upgrade it during Phase 1.
+The repository pins `boardgame.io` to 0.50.2. Do not casually upgrade it during Phase 1 because the current server includes a transport-level privacy guard specific to this version's initial synchronization behavior.
 
 ## Why this stack was chosen
 
@@ -58,51 +63,48 @@ The project is being developed solo, so minimizing duplicated platform-specific 
 
 A browser-first client gives immediate coverage for phones, tablets, desktops, and many TV/browser scenarios. Native wrappers or dedicated mobile / TV apps can be considered later if necessary.
 
-Using TypeScript on both client and server also reduces context switching and makes it easier to share types and game models.
+Using TypeScript on both client and server reduces context switching and makes it easier to share types and game models.
 
 `boardgame.io` is a library, not an external hosted service. It runs as part of this application's server and client code. The platform therefore does not depend on a third-party boardgame.io cloud service to host a session.
 
 ## Online and local-network sessions
 
-The architecture should support both internet-hosted and LAN-hosted sessions.
+The architecture supports both internet-hosted and LAN-hosted sessions through the same protocol.
 
 For a local-network session, one machine can run the Node.js / boardgame.io server and frontend. Other phones, tablets, or a TV browser on the same network connect to that machine using its LAN IP address.
 
-This means a local session can work without an external game backend, provided the devices can reach the host machine over the network.
-
-The same game rules and synchronization model should be used for LAN and internet play. Avoid creating separate gameplay implementations for those modes.
+The client derives the game-server hostname from the current browser hostname by default and can use `VITE_SERVER_URL` for a hosted deployment. Avoid separate LAN-only game logic.
 
 ## Authoritative state and privacy
 
 The server is authoritative.
 
-Critical game logic must execute on the server side, including:
+Critical game logic must execute or be validated on the server side, including:
 
+- deck creation,
 - shuffling,
-- dealing,
-- validating moves,
-- advancing turns,
-- determining results.
+- dealing / drawing,
+- legal moves,
+- turn progression,
+- game start,
+- winner/tie calculation,
+- replay/reset.
 
-Do not trust a client to decide game outcomes or manipulate canonical game state.
+Do not trust a client to decide outcomes or manipulate canonical game state.
 
-Card visibility is a core architectural requirement, not just a UI detail.
+Card visibility is a core architectural requirement, not just a UI concern.
 
 Each player should receive only information they are allowed to know. A player may see their own private hand and public table state, but should not receive another player's private cards.
 
 The table / spectator view should receive public state only and must never expose private hands.
 
-Use boardgame.io player-specific state filtering (`playerView` or equivalent supported mechanism) rather than merely hiding secret information with CSS or client-side rendering.
+The current implementation uses boardgame.io `playerView` filtering plus a custom `PrivateStateSocketIO` guard because boardgame.io 0.50.2 can include an unfiltered historical `initialState` snapshot in synchronization payloads. Keep the regression tests for this path whenever transport or boardgame.io dependencies change.
 
 ## Player view vs table view
 
-The application should support at least two presentation roles:
-
 ### Player view
 
-Intended mainly for a phone or personal device.
-
-It can show:
+Intended mainly for a phone or personal device. It can show:
 
 - that player's private hand,
 - legal actions,
@@ -111,36 +113,62 @@ It can show:
 
 ### Table view
 
-Intended for a TV, tablet, laptop, or other shared display.
+Intended for a TV, tablet, laptop, or other shared display. It should show:
 
-It should show:
-
-- cards / objects visible to everyone,
+- only public cards / objects,
 - turn information,
 - player names / seats,
 - scores or round state,
 - other public game information.
 
-It must not display any player's private hand.
-
-The underlying game state should be shared; these are different views of the same session, not separate games.
+It must not display private hands. The underlying game is the same session; the table is an observer/spectator role, not a player seat.
 
 ## Graphics and animation expectations
 
-Cards are expected to have real visual representations rather than remain text-only.
+Cards now have reusable SVG rendering in the React client, including all 52 faces, patterned backs, card slots, responsive layouts, and winner emphasis.
 
-The React frontend can use SVG or image-based card assets. Later polish may include animations such as:
+Future polish may include:
 
-- dealing cards,
+- dealing animations,
 - card flips,
 - moving a card from a hand to the table,
 - collecting tricks / piles,
-- highlighting the active player,
-- win / round-complete feedback.
+- active-player highlighting,
+- round-complete transitions.
 
-Animations are a frontend concern and should not alter or duplicate authoritative game logic. The client should animate transitions in response to state changes from the server.
+Animations remain a frontend concern and must react to authoritative state changes rather than drive game logic.
 
-A React animation library may be introduced when useful, but Phase 1 should prioritize a reliable multiplayer flow before visual polish.
+## Current verified state — 2026-09-06
+
+Astra/Codex completed and committed a substantial Phase 1 checkpoint after the original scaffold and handoff documents were created.
+
+Verified in the repository now:
+
+- Room creation automatically reserves the host seat and returns opaque credentials.
+- Guests can inspect public seat occupancy, choose an available seat, and join.
+- Room codes, join links, and QR sharing are present.
+- The host can start only after all required seats are occupied; the server independently enforces the rule.
+- Premature draws and raw lifecycle bypasses are blocked.
+- The 52-card deck, shuffle, randomized turn order, one-card draw demo, reveal, winner/tie detection, and replay behavior work.
+- Private-state leakage was repaired: clients receive no private deck, players see only their own card before reveal, spectators see public progress only, and the initial SocketIO sync path is explicitly filtered.
+- Automated coverage expanded to 11 tests, including authenticated players, spectators, late joins, privacy, start authorization, forged lifecycle actions, reveal, winner, and replay.
+- Both server and client production builds pass.
+- Development mode, compiled-server startup, and built-client preview were verified.
+- The client now has graphical SVG cards and a responsive green-felt presentation.
+- A two-browser end-to-end flow was manually verified.
+
+The authoritative current-status record is `ledger.md`; use it instead of treating this file as a live task tracker.
+
+## Remaining Phase 1 work
+
+The current priority order from `ledger.md` is:
+
+1. Add an independently accessible public-table entry point. The table currently appears alongside a joined player's board rather than as a standalone shared-display session.
+2. Make round completion / replay permissions consistent and verify turn order after replay.
+3. Decide whether Phase 1 requires an explicit initial-deal step distinct from the existing one-card draw action.
+4. Expand lifecycle / authorization coverage as needed and validate the complete flow on physical LAN devices and on a hosted server.
+
+Known session limitations include browser-memory-only credentials, no refresh recovery, no host transfer, permissive development CORS, and no hosted deployment hardening yet.
 
 ## User-defined games: future direction
 
@@ -148,70 +176,48 @@ The long-term differentiator is allowing users to add their own card games and r
 
 Do not implement arbitrary user-supplied JavaScript execution in Phase 1.
 
-For now, keep game-specific logic modular so multiple games can later conform to a common platform contract. Future approaches may include a constrained rule DSL, declarative rule definitions, templates, or carefully sandboxed extensions, but that design should be based on experience gained from implementing several real games first.
-
-## Repository history and current state
-
-The repository was scaffolded as a TypeScript monorepo using Node.js, React + Vite, and boardgame.io.
-
-The current codebase already contains more than an empty scaffold. According to the repository progress log, it includes work for:
-
-- a 52-card demo game,
-- shuffled deck handling,
-- per-player hands,
-- hidden / masked hand state,
-- a boardgame.io server,
-- React player and table views,
-- lobby-based create / join flow,
-- player names and credentials,
-- room codes,
-- randomized turn order,
-- a turn-based draw flow,
-- winner detection,
-- a play-again / reset flow,
-- basic tests.
-
-Before changing architecture, inspect the repository and verify which of these features are currently functional.
+Keep game-specific logic modular so multiple games can later conform to a common platform contract. Future approaches may include a constrained rule DSL, declarative rule definitions, templates, or carefully sandboxed extensions, but that design should be based on experience gained from implementing several real games first.
 
 ## Development environment
 
-Development has been set up on Arch Linux running under WSL.
+The active local Windows checkout used with the ChatGPT desktop/Astra workflow is:
 
-Typical root-level commands are:
+```text
+C:\Users\mdelg\Documents\card-genie
+```
+
+Earlier setup work also used Arch Linux under WSL, but do not assume the WSL checkout is the active copy.
+
+From the repository root, the standard workflow is:
 
 ```bash
 npm install
+npm run build:server
+npm run build:client
+npm test
 npm run dev:server
 npm run dev:client
-npm test
 ```
 
-The development server is expected on port 8000 and the Vite client on port 5173 unless the current code says otherwise.
+The server is expected on port 8000 and the Vite client on port 5173 unless the current code says otherwise.
+
+Current README prerequisites require Node.js 20.19+ within major 20, or Node.js 22.12+; the latest verified Astra run used Node.js 24.12.0 and npm 11.6.2.
 
 Keep package dependencies local to the project where practical. Do not rely on global TypeScript or Vite installations for the repository to build.
 
 ## Guidance for coding agents
 
-Read `AGENTS.md` first for repository-specific working instructions.
+Read, in order:
 
-Then inspect the code before proposing large changes. Prefer the smallest complete vertical slice that moves Phase 1 forward.
+1. `AGENTS.md` for repository-specific working instructions.
+2. `goals.md` for Phase 1 acceptance criteria and architecture constraints.
+3. `ledger.md` for current verified progress, limitations, and next priorities.
+4. `README.md` for the actual run/build workflow.
+5. This file for product history and design rationale.
+6. `LOG.md` only when historical context is useful.
 
-In particular:
+Then inspect the relevant code before proposing large changes.
 
-- preserve the Node.js + TypeScript + boardgame.io + React/Vite architecture unless there is a concrete technical reason to change it,
-- keep game-specific rules separate from transport and presentation,
-- keep private information server-filtered,
-- keep LAN and online gameplay on the same core architecture,
-- add tests for game logic and visibility boundaries,
-- avoid premature scaling infrastructure,
-- avoid building the user-defined rule engine until the basic multiplayer experience is solid.
+Preserve the Node.js + TypeScript + boardgame.io + React/Vite architecture unless there is a concrete technical reason to change it. Keep game rules separate from transport and presentation, keep private information server-filtered, keep LAN and online gameplay on the same protocol, and avoid premature scaling or the user-defined-rule engine.
 
-## Immediate handoff goal
-
-When continuing development in ChatGPT Astra / Codex or another coding agent, begin by reading `AGENTS.md`, this file, `README.md`, and `LOG.md`, then run the existing build / tests and inspect the current Phase 1 implementation.
-
-The first task should be to identify the smallest missing piece required to make this entire experience work reliably:
-
-`Create room -> join from multiple devices -> assign players -> start -> shuffle/deal -> private hands -> public table -> perform move -> synchronized result`
-
-Do not assume the progress log is proof that every feature currently works; verify the implementation and tests first.
+When continuing development, start from the current `ledger.md` priorities rather than re-implementing the already completed room, privacy, build, or card-graphics work.
