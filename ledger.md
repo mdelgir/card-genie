@@ -12,7 +12,7 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | Player and spectator privacy | Verified in automated tests | Private deck excluded; own hand only before reveal; public draw status; initial-sync guard removes historical secrets and random state. |
 | Synchronization | Verified locally | Authenticated SocketIO players, spectator/late join, draw, reveal, winner, and replay covered. |
 | Independent table entry | Verified locally | `/?table=<matchID>` opens a credential-less public table without consuming a seat. Player pages mount only their own board. |
-| Round completion and replay | Partial | Winner/reveal and replay work; no boardgame.io game-over state; replay button is shown to players who lack the active turn. |
+| Round completion and replay | Verified locally | Explicit waiting/playing/complete status; final-draw/current player alone may replay. Fresh deck, cleared private state, and refreshed full turn order verified. |
 | Card graphics | Verified visually | All 52 SVG faces, patterned backs, card slots, deck stack, and winner emphasis; desktop/mobile browser checks and private-card labels verified. |
 | Builds | Verified | Both production builds pass; compiled server responds to /games; built client preview returns HTTP 200. |
 | Device / hosted validation | Partial | Two browser tabs and their table views verified locally. Physical phones, TV/tablet layout, LAN reachability, and hosted end-to-end use remain unverified. |
@@ -64,9 +64,8 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 
 ## Next priorities
 
-1. Make round completion/replay permissions consistent; verify turn order on replay.
-2. Clarify whether Phase 1 needs an initial deal separate from the retained one-card draw action.
-3. Expand rule/authorization tests and verify the complete flow on physical LAN devices and a hosted server.
+1. Clarify whether Phase 1 needs an initial deal separate from the retained one-card draw action.
+2. Expand rule/authorization tests and verify the complete flow on physical LAN devices and a hosted server.
 
 ## Known limitations
 
@@ -88,3 +87,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - Preserved the game, server, and transport privacy implementations. Extended the real SocketIO regression test to assert that an additional table does not alter player-seat metadata; existing coverage verifies private hands, deck, historical snapshots, random state, reveal, and replay.
 - Validation: both production builds and all eleven tests pass. Three separate browser tabs verified host creation, guest seat selection/join, table waiting with an empty seat, host start after both player seats filled, live face-down draw progress, public reveal/winner, and one board per player. Empty and nonexistent table IDs show useful errors; full-width felt presentation inspected visually.
 - Physical LAN devices and hosted use remain unverified. Round/replay cleanup and all later roadmap work remain pending; this task does not change them. The previously reported guest-seat selection/retry UX issue is outside this brief and remains unresolved.
+
+## 2026-09-06 — Round completion and replay cleanup
+
+- Completed the round/replay brief in NEXT_TASK.md. Added public authoritative `roundStatus` (`waiting`, `playing`, `complete`) to setup, start, final draw, replay, and the playerView allowlist. Retained `revealed` for card visibility and `started` for existing room-start checks; a completed round is not a terminal boardgame.io gameover.
+- Replay policy: only the authoritative current player at completion (the final-draw player) can replay. Game checks and boardgame.io authorization enforce this; that player's button is disabled when disconnected. Other players see who must replay, and the public table has no player controls. Every board labels the completed round explicitly.
+- Replay now re-enters the playing phase through boardgame.io, refreshing `ctx.playOrder`, its position, and current player from the newly shuffled `G.playOrder`. Previously endTurn selected a new first player but retained the old engine turn sequence. The final draw does not advance the turn.
+- Validation: both production builds and all 13 tests pass. Coverage includes deterministic winner/tie completion, rejected premature replay and post-completion draws, raw SocketIO unauthorized player/spectator replay attempts, a fresh unique 52-card server deck, cleared round state, and valid synchronized turn ownership. A seeded three-player test verifies changed full turn sequences over repeated rounds. Player/table current-state and reconnect privacy remain verified after a next-round draw, including empty deck payloads, filtered initial history, undo/redo, and random state.
+- Three browser tabs verified host/guest/table completion with the same winner, replay available only to the final-draw guest, a waiting message for the host, no table actions, cleared cards/winner and 52-card count after replay, a changed first player, and the next legal private draw synchronized as a face-down card on the table.
+- Existing sessions from before this state-schema change are not migrated; restart the server and create fresh rooms when updating. If the replay-authorized player loses credentials or leaves, recovery/host transfer remains unavailable. Physical LAN/hosted checks and the existing join UX issue remain pending. No initial-deal redesign or later roadmap work was undertaken.

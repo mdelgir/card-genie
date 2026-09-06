@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "boardgame.io/client";
 import { Local } from "boardgame.io/multiplayer";
+import { INVALID_MOVE } from "boardgame.io/core";
 import { SimpleCardGame, type SimpleCardGameState } from "./simple-card-game";
 
 const setupContext = {
@@ -24,9 +25,62 @@ const move = (name: "drawCard" | "restartGame" | "startGame") => {
   return definition.move;
 };
 const draw = (G: SimpleCardGameState, playerID: string) =>
-  move("drawCard")({ G, playerID, events: { endTurn: () => {} } } as any);
+  move("drawCard")({ G, ctx: { currentPlayer: playerID }, playerID, events: { endTurn: () => {} } } as any);
 
 const viewers = ["0", "1", null, undefined, "unknown"];
+
+test("completion is deterministic for a tie and rejects further draws without changing state", () => {
+  const G = setup();
+  G.deck = [{ suit: "clubs", rank: "A", value: 14 }, { suit: "hearts", rank: "A", value: 14 }];
+  draw(G, "0");
+  assert.equal(G.roundStatus, "playing");
+  draw(G, "1");
+  assert.equal(G.roundStatus, "complete");
+  assert.equal(G.winner, "tie");
+  const before = structuredClone(G);
+  assert.equal(draw(G, "1"), INVALID_MOVE);
+  assert.deepEqual(G, before);
+});
+
+test("three-player replays refresh the entire turn sequence", async () => {
+  const multiplayer = Local();
+  const game = { ...SimpleCardGame, seed: "replay-order-regression" };
+  const clients = ["0", "1", "2"].map(playerID => Client({
+    game, numPlayers: 3, playerID, multiplayer, matchID: "replay-order", debug: false,
+  }));
+  const waitFor = async (predicate: () => boolean) => {
+    const deadline = Date.now() + 3000;
+    while (!predicate()) {
+      assert.ok(Date.now() < deadline, "Timed out waiting for replay turn order");
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  };
+  const orders = new Set<string>();
+  try {
+    clients.forEach(c => c.start());
+    await waitFor(() => clients.every(c => Boolean(c.getState())));
+    clients[0].moves.startGame();
+    await waitFor(() => clients.every(c => c.getState()!.G.roundStatus === "playing"));
+    for (let round = 0; round < 3; round++) {
+      const order = clients[0].getState()!.G.playOrder;
+      orders.add(order.join(","));
+      assert.deepEqual([...order].sort(), ["0", "1", "2"]);
+      for (let position = 0; position < order.length; position++) {
+        clients.forEach(c => {
+          assert.deepEqual(c.getState()!.ctx.playOrder, order);
+          assert.equal(c.getState()!.ctx.currentPlayer, order[position]);
+          assert.equal(c.getState()!.ctx.playOrderPos, position);
+        });
+        clients[Number(order[position])].moves.drawCard();
+        await waitFor(() => clients.every(c => c.getState()!.G.deckCount === 51 - position));
+      }
+      clients.forEach(c => assert.equal(c.getState()!.G.roundStatus, "complete"));
+      clients[Number(order[2])].moves.restartGame();
+      await waitFor(() => clients.every(c => c.getState()!.G.deckCount === 52));
+    }
+    assert.ok(orders.size > 1, "fixture must exercise a changed order across rounds");
+  } finally { clients.forEach(c => c.stop()); }
+});
 
 test("setup creates a full deck and empty hands", () => {
   const state = setup();
@@ -60,6 +114,7 @@ test("drawCard assigns cards and sets winner once all drawn", () => {
   assert.equal(state.deckCount, 50);
   assert.equal(state.revealed, true);
   assert.equal(state.winner, "1");
+  assert.equal(state.roundStatus, "complete");
 });
 
 test("each player sees only their own card; spectators see public progress", () => {
@@ -104,7 +159,8 @@ test("replay resets public progress and keeps the fresh deck private", () => {
   const state = setup();
   draw(state, "0");
   draw(state, "1");
-  move("restartGame")({ ...setupContext, G: state, events: { endTurn: () => {} } });
+  move("restartGame")({ ...setupContext, ctx: { numPlayers: 2, currentPlayer: "1" }, playerID: "1", G: state, events: { setPhase: () => {} } } as any);
+  assert.equal(state.roundStatus, "playing");
   assert.equal(state.deck.length, 52);
   assert.equal(state.deckCount, 52);
   assert.deepEqual(state.hasDrawn, { "0": false, "1": false });
@@ -207,6 +263,8 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
     assert.deepEqual(initial.plugins, {});
     assert.deepEqual(initial._undo, []);
     assert.deepEqual(initial._redo, []);
+    assert.deepEqual(state._undo, []);
+    assert.deepEqual(state._redo, []);
     assert.equal(JSON.stringify(state.plugins).includes('"seed"'), false);
     assert.equal(JSON.stringify(state.plugins).includes('"prngstate"'), false);
   };
@@ -220,6 +278,7 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
     assert.equal((await startRoom(hostCredentials)).status, 409, "empty seats prevent starting");
     const waiting = await server.db.fetch(matchID, { state: true });
     assert.equal(waiting.state!.ctx.phase, "waiting");
+    assert.equal(waiting.state!.G.roundStatus, "waiting");
     assert.deepEqual(waiting.state!.G.deck, []);
     let guestCredentials = "";
     for (const playerID of ["0", "1", undefined]) {
@@ -265,8 +324,32 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
     const simultaneous = await Promise.all([startRoom(hostCredentials), startRoom(hostCredentials)]);
     assert.deepEqual(simultaneous.map(response => response.status).sort(), [200, 409]);
     await waitFor(() => clients.every(c => c.getState()!.G.started));
+    clients.forEach(c => assert.equal(c.getState()!.G.roundStatus, "playing"));
     assert.equal((await startRoom(hostCredentials)).status, 409, "repeat start is rejected");
     const first = clients[0].getState()!.ctx.currentPlayer;
+    // Send directly over SocketIO so client-side move checks cannot mask a bypass.
+    const rejectMove = async (playerID: string | null, type: string) => {
+      const before = (await server.db.fetch(matchID, { state: true })).state!;
+      const canonical = (state: typeof before) => structuredClone({
+        G: state.G, ctx: state.ctx, _stateID: state._stateID,
+        plugins: Object.fromEntries(Object.entries(state.plugins).map(([key, plugin]) => [key, plugin.data])),
+      });
+      const expected = canonical(before);
+      const socket = io(url + "/simple-card-game", { forceNew: true });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          socket.once("connect", resolve);
+          socket.once("connect_error", reject);
+        });
+        const credentials = playerID === "0" ? hostCredentials : playerID === "1" ? guestCredentials : undefined;
+        socket.emit("update", { type: "MAKE_MOVE", payload: { type, args: [], playerID, credentials } },
+          before._stateID, matchID, playerID);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        assert.deepEqual(canonical((await server.db.fetch(matchID, { state: true })).state!), expected,
+          `${playerID ?? "spectator"} cannot ${type} in this state`);
+      } finally { socket.disconnect(); }
+    };
+    await rejectMove(first, "restartGame");
     clients[Number(first)].moves.drawCard();
     await waitFor(() => clients.every(c => c.getState()!.G.deckCount === 51));
     clients.forEach((client, index) => {
@@ -290,18 +373,51 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
     await waitFor(() => clients.every(c => c.getState()!.G.revealed));
     const winner = clients[0].getState()!.G.winner;
     clients.forEach(client => {
+      assert.equal(client.getState()!.G.roundStatus, "complete");
+      assert.equal(client.getState()!.ctx.currentPlayer, last, "final draw must not advance the turn");
       assertPrivate(client);
       assert.ok(client.getState()!.G.hands["0"]);
       assert.ok(client.getState()!.G.hands["1"]);
       assert.equal(client.getState()!.G.winner, winner);
     });
+    await rejectMove(last, "drawCard");
+    await rejectMove(first, "restartGame");
+    await rejectMove(null, "restartGame");
     clients[Number(last)].moves.restartGame();
     await waitFor(() => clients.every(c => !c.getState()!.G.revealed));
     clients.forEach(client => {
       assertPrivate(client);
+      assert.equal(client.getState()!.G.roundStatus, "playing");
+      assert.equal(client.getState()!.G.winner, null);
+      assert.deepEqual([...client.getState()!.G.playOrder].sort(), ["0", "1"]);
+      assert.deepEqual(client.getState()!.ctx.playOrder, client.getState()!.G.playOrder);
+      assert.equal(client.getState()!.ctx.currentPlayer, client.getState()!.G.playOrder[0]);
       assert.equal(client.getState()!.G.deckCount, 52);
       assert.deepEqual(client.getState()!.G.hasDrawn, { "0": false, "1": false });
       assert.deepEqual(client.getState()!.G.hands, { "0": null, "1": null });
+    });
+    const fresh = (await server.db.fetch(matchID, { state: true })).state!;
+    assert.equal(fresh.G.deck.length, 52);
+    assert.equal(new Set(fresh.G.deck.map((c: { suit: string; rank: string }) => `${c.suit}:${c.rank}`)).size, 52);
+    const nextFirst = fresh.ctx.currentPlayer;
+    await rejectMove(nextFirst === "0" ? "1" : "0", "drawCard");
+    clients[Number(nextFirst)].moves.drawCard();
+    await waitFor(() => clients.every(c => c.getState()!.G.deckCount === 51));
+    // Reconnect both an authenticated player and a new table after a next-round draw.
+    for (const playerID of [nextFirst, undefined]) {
+      const client = Client({ game: SimpleCardGame, matchID, playerID,
+        credentials: playerID === undefined ? undefined : playerID === "0" ? hostCredentials : guestCredentials,
+        multiplayer: SocketIO({ server: url }), debug: false });
+      clients.push(client);
+      client.start();
+      await waitFor(() => Boolean(client.getState()));
+      assertPrivate(client);
+      assert.equal(Boolean(client.getState()!.G.hands[nextFirst]), playerID === nextFirst);
+      assert.equal(client.getState()!.G.hands[nextFirst === "0" ? "1" : "0"], null);
+    }
+    clients.slice(0, 4).forEach((client, index) => {
+      assertPrivate(client);
+      assert.equal(Boolean(client.getState()!.G.hands[nextFirst]), String(index) === nextFirst);
     });
   } finally {
     clients.forEach(client => client.stop());
@@ -315,6 +431,7 @@ test("waiting setup does not shuffle; only the host can transition once", () => 
   const G = SimpleCardGame.setup!(context);
   assert.deepEqual(G.deck, []);
   assert.equal(G.started, false);
+  assert.equal(G.roundStatus, "waiting");
   assert.equal(move("drawCard")({ G, playerID: "0" } as any), INVALID_MOVE);
   assert.equal(move("restartGame")({ G } as any), INVALID_MOVE);
   const before = structuredClone(G);
@@ -324,6 +441,7 @@ test("waiting setup does not shuffle; only the host can transition once", () => 
   move("startGame")({ ...setupContext, G, playerID: "0", events: { setPhase: (next: string) => { phase = next; } } });
   assert.equal(phase, "playing");
   assert.equal(G.started, true);
+  assert.equal(G.roundStatus, "playing");
   assert.equal(G.deck.length, 52);
   const started = structuredClone(G);
   assert.equal(move("startGame")({ ...setupContext, G, playerID: "0" } as any), INVALID_MOVE);

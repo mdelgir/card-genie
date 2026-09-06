@@ -27,6 +27,8 @@ export interface SimpleCardGameState {
   // Authoritative deck; playerView always replaces it with an empty array.
   deck: Card[];
   started: boolean;
+  // Public, authoritative lifecycle; revealed controls card visibility only.
+  roundStatus: "waiting" | "playing" | "complete";
   deckCount: number;
   hasDrawn: Record<string, boolean>;
   hands: Record<string, Card | null>;
@@ -100,6 +102,7 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
     return {
       deck,
       started: false,
+      roundStatus: "waiting",
       deckCount: deck.length,
       hasDrawn: Object.fromEntries(Object.keys(hands).map((id) => [id, false])),
       hands,
@@ -118,13 +121,14 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
         G.deckCount = G.deck.length;
         G.playOrder = random.Shuffle(Object.keys(G.hands));
         G.started = true;
+        G.roundStatus = "playing";
         events.setPhase("playing");
       },
     },
     drawCard: {
       client: false,
-      move: ({ G, playerID, events }) => {
-        if (!G.started || !playerID) return INVALID_MOVE;
+      move: ({ G, ctx, playerID, events }) => {
+        if (G.roundStatus !== "playing" || !playerID || playerID !== ctx.currentPlayer) return INVALID_MOVE;
         if (G.hands[playerID]) return INVALID_MOVE;
 
         const [card, ...rest] = G.deck;
@@ -137,6 +141,7 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
 
         const allDrawn = Object.values(G.hands).every(Boolean);
         if (allDrawn) {
+          G.roundStatus = "complete";
           G.revealed = true;
           G.winner = computeWinner(G.hands);
         } else {
@@ -148,8 +153,8 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
     },
     restartGame: {
       client: false,
-      move: ({ G, ctx, random, events }) => {
-        if (!G.started || !G.revealed) return INVALID_MOVE;
+      move: ({ G, ctx, playerID, random, events }) => {
+        if (G.roundStatus !== "complete" || !playerID || playerID !== ctx.currentPlayer) return INVALID_MOVE;
 
         const deck = random.Shuffle(createDeck());
         const hands: Record<string, Card | null> = {};
@@ -163,11 +168,13 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
         G.hands = hands;
         G.winner = null;
         G.revealed = false;
+        G.roundStatus = "playing";
         G.playOrder = random.Shuffle(
           Array.from({ length: ctx.numPlayers }, (_, index) => String(index))
         );
 
-        events.endTurn({ next: G.playOrder[0] });
+        // Re-enter the phase to refresh ctx.playOrder as well as its first player.
+        events.setPhase("playing");
 
         return G;
       },
@@ -183,6 +190,7 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
       // Allowlist public fields so future private zones cannot leak by default.
       deck: [],
       started: G.started,
+      roundStatus: G.roundStatus,
       deckCount: G.deck.length,
       hasDrawn: Object.fromEntries(
         Object.entries(G.hands).map(([id, card]) => [id, Boolean(card)])
