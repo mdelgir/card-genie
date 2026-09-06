@@ -48,9 +48,11 @@ Before beginning the generalized game-definition system, close the remaining Pha
    - Start a replay with fresh shuffled/private state.
    - Verify turn order and lifecycle state after replay.
 
-3. **Deal semantics**
-   - Decide whether Highest Card should automatically deal at round start or intentionally retain the explicit draw action.
-   - Make that behavior an explicit game rule rather than an accidental property of the demo.
+3. **Deal semantics — decided for Phase 1**
+   - Highest Card intentionally does **not** auto-deal a private card to every player at round start.
+   - Each player explicitly draws exactly one private card on their legal turn; that draw is the demo's deal mechanic.
+   - Retaining the explicit draw is intentional because it exercises turn ownership, legal-action enforcement, private-card delivery, public draw status, synchronization, and reveal.
+   - A future configurable game may choose automatic setup dealing through its `GameDefinition`; Phase 1 Highest Card does not need a separate initial-deal step.
 
 4. **Real-device validation**
    - Run the server on the development PC.
