@@ -1,212 +1,168 @@
-# Next Task — Standalone Public Table
+# Next Task — Round Completion and Replay Cleanup
 
-This file is a focused implementation brief for the next Astra/Codex session. `ledger.md` remains the source of truth for verified project status; update it after this task is completed and tested.
+This file is the focused implementation brief for the next Astra/Codex session. `ledger.md` remains the source of truth for verified project status; update it after this task is completed and tested.
 
 ## Objective
 
-Finish the next Phase 1 gap by making the existing spectator/table capability independently accessible from a browser, tablet, or TV without occupying a player seat.
+Finish the next Phase 1 lifecycle gap: make round completion explicit, make replay permissions match the UI, and prove that replay starts a clean new round with a valid fresh turn order and no privacy regression.
 
-The public table must observe the same boardgame.io match as the players and receive public state only.
+Do **not** begin the user-defined rule engine or broaden the game beyond the existing Highest Card demo.
 
-## Important finding from repository inspection
+## Current behavior found in the repository
 
-Most of the table functionality already exists. Do **not** redesign the server or game model unless testing proves it is necessary.
+The existing demo already completes a round functionally:
 
-Current behavior in `client/src/App.tsx` mounts two `GameClient` instances after a player joins:
+- each player draws one card,
+- the final draw sets `G.revealed = true`,
+- `G.winner` becomes a player ID or `"tie"`,
+- all cards then become public through `playerView`,
+- `restartGame` reshuffles a full deck, clears hands/progress, reshuffles `playOrder`, and calls `events.endTurn({ next: G.playOrder[0] })`.
 
-```tsx
-<GameClient
-  playerID={playerID}
-  matchID={matchID}
-  credentials={playerCredentials ?? undefined}
-/>
+However, the lifecycle is still ambiguous:
 
-<GameClient matchID={matchID} />
-```
+1. `revealed` currently doubles as both a presentation flag and the effective "round complete" flag.
+2. There is no explicit domain-level round status.
+3. `GameBoard` shows a "Play again" button to every player after reveal, while boardgame.io move authorization still depends on the active/current player. This means some users are shown a control they cannot actually use.
+4. Replay turn order is implemented but needs explicit regression coverage proving that `ctx.currentPlayer`, `G.playOrder`, legal-move ownership, and fresh private state agree after restart.
 
-The second client is already a credential-less spectator/table client.
+The standalone public table is already complete. Preserve it.
 
-`client/src/GameBoard.tsx` already detects table mode with:
+## Recommended Phase 1 design
+
+### 1. Add explicit round state
+
+Prefer a small domain-level status instead of using `ctx.gameover` for this Phase 1 demo. A suggested shape is:
 
 ```ts
-const isTable = !playerID;
+type RoundStatus = "waiting" | "playing" | "complete";
 ```
 
-and already:
+or an equally clear equivalent.
 
-- hides the private hand,
-- hides player action buttons,
-- renders the shared/public table presentation,
-- shows public card slots,
-- shows turn/reveal/winner status,
-- reuses the existing SVG cards and felt styling.
+Expected semantics:
 
-The server/game privacy path is also already in place:
+- initial room: `waiting`
+- host start: `playing`
+- final draw / winner computed: `complete`
+- replay: `playing`
 
-- `SimpleCardGame.playerView` masks all private hands for spectators before reveal.
-- `PrivateStateSocketIO` strips the unsafe historical `initialState`, random-plugin state, undo/redo history, and other private sync data.
-- Existing SocketIO tests already cover credential-less spectators and a late-joining spectator after a player has drawn.
+Keep `revealed` only if it remains useful for rendering/privacy, but do not make UI/lifecycle logic depend on an ambiguous proxy when an explicit status can be used.
 
-Because of this, this task should primarily be a client-entry / presentation change, not a server redesign.
+Do not introduce boardgame.io `endGame` merely to satisfy the phrase "completed round" if doing so complicates in-match replay. The goal is an explicit authoritative round-complete state, not necessarily a terminal match/gameover state.
 
-## Recommended implementation
+### 2. Make replay permission intentional and visible
 
-### 1. Add an independent table URL
+For the smallest Phase 1 fix, use the existing boardgame.io turn authorization rather than inventing a new lifecycle endpoint.
 
-Use a query-parameter entry point for the Phase 1 MVP:
+Recommended policy for this demo:
+
+> The player who is still the authoritative current player when the round completes may start the next round.
+
+That is normally the player who made the final draw.
+
+Update the UI so:
+
+- only the player who is actually allowed to replay gets an enabled "Play again" control,
+- other players see a clear waiting message such as "Waiting for <name> to start the next round",
+- the public table never receives replay controls,
+- an unauthorized/non-current player replay attempt is rejected authoritatively even if they forge a move packet.
+
+If repository inspection reveals a clean, small boardgame.io-native way to allow **all seated players** to replay without weakening move authorization or adding brittle lifecycle logic, that is acceptable, but explain the approach before implementing it. Do not bypass boardgame.io authorization just to make the button work for everyone.
+
+### 3. Make replay a clean new round
+
+After an accepted replay, verify all of the following authoritative state:
 
 ```text
-/?table=<matchID>
+round status     -> playing
+revealed         -> false
+winner           -> null
+hands            -> all null
+hasDrawn         -> all false
+deck             -> fresh full 52-card shuffled deck on server
+deckCount        -> 52 publicly
+playOrder        -> valid permutation of every player ID
+ctx.currentPlayer-> playOrder[0]
 ```
 
-Example:
+The next legal draw must belong to the new first player. A player who is not the new current player must not be able to draw.
+
+Do not rely only on UI checks; add direct game/network assertions.
+
+### 4. Preserve privacy across round boundaries
+
+Replay must not expose the fresh deck, card order, random-plugin state, or any player's next-round card through:
+
+- current state,
+- initial/reconnect snapshots,
+- undo/redo history,
+- spectator/table synchronization.
+
+Keep the existing `playerView` allowlist and `PrivateStateSocketIO` regression coverage intact.
+
+### 5. Keep round completion deterministic
+
+On the final draw:
+
+- compute winner/tie once,
+- transition the explicit round status to complete,
+- reveal only because the authoritative round is complete,
+- do not advance into a phantom next turn before replay,
+- do not allow further draws until replay.
+
+## Likely files
+
+The task is expected to focus on:
 
 ```text
-http://192.168.1.25:5173/?table=abc123
-```
-
-Prefer this over introducing React Router or a `/table/<id>` route right now because:
-
-- the client currently has no routing dependency,
-- static hosting does not need SPA rewrite rules for a query-param URL,
-- it is the smallest change that proves the table-device use case.
-
-A future routing cleanup can replace this later if needed.
-
-### 2. Render only the spectator client in table mode
-
-When `?table=<matchID>` is present:
-
-- do not show the create/join-player form,
-- do not request a player name,
-- do not request/select a seat,
-- do not create player credentials,
-- do not occupy a seat,
-- mount only:
-
-```tsx
-<GameClient matchID={matchID} />
-```
-
-This should connect to the same boardgame.io match as the players with `playerID` undefined.
-
-### 3. Stop mounting a table inside every player browser
-
-After this feature exists, the normal joined-player page should render only the authenticated player `GameClient`.
-
-Remove the extra credential-less spectator `GameClient` that is currently mounted beneath/alongside every joined player.
-
-Target architecture:
-
-```text
-Phone A
-  -> authenticated player GameClient
-
-Phone B
-  -> authenticated player GameClient
-
-TV / tablet
-  -> credential-less spectator GameClient
-
-All three
-  -> same match / same authoritative server state
-```
-
-### 4. Add an "Open public table" link
-
-Near the existing room/join sharing controls, expose a table link such as:
-
-```text
-Join players:  /?room=<matchID>
-Public table:  /?table=<matchID>
-```
-
-The table link should be easy to copy/open on a separate browser or shared display.
-
-Do not replace the existing player join link or QR behavior unless necessary.
-
-### 5. Handle invalid table room IDs cleanly
-
-Reuse existing lobby metadata / `useRoomSeats` behavior where practical so a bad or missing room ID produces a useful error instead of leaving a spectator client in an indefinite loading state.
-
-Do not require credentials for room existence checks.
-
-### 6. Make standalone table layout full-width
-
-The current `main` layout is optimized for two columns because the player and table boards were previously rendered together.
-
-In standalone table mode, make the table use the available page width and remain suitable for a tablet/TV display.
-
-Keep the existing graphical card components and green-felt styling. Avoid unrelated visual redesign.
-
-## Expected files
-
-The smallest implementation is expected to touch approximately:
-
-```text
-client/src/App.tsx
-client/src/index.css
-games/simple-card-game.test.ts   # small explicit spectator/seat assertion only if useful
+games/simple-card-game.ts
+games/simple-card-game.test.ts
+client/src/GameBoard.tsx
 ledger.md
 ```
 
-Likely **no changes** should be needed in:
+`server/src/room-server.ts` should probably not need changes if the recommended current-player replay policy is used.
 
-```text
-client/src/GameBoard.tsx
-client/src/WaitingRoom.tsx
-server/src/room-server.ts
-server/src/private-state-transport.ts
-games/simple-card-game.ts
-```
+`server/src/private-state-transport.ts` should not change unless a new failing privacy regression proves a concrete need.
 
-If one of those files must change, explain the concrete reason before broadening the implementation.
+`client/src/App.tsx`, the standalone table URL, room creation/joining, and QR behavior are out of scope unless a lifecycle bug directly requires a minimal correction.
 
-## Privacy and authority requirements
+## Required automated coverage
 
-Do not weaken any existing privacy protection.
+Add or strengthen tests so they prove at least:
 
-The standalone table must:
+1. The game begins with the explicit non-complete round status.
+2. Host start moves the round to the active/playing status.
+3. The final legal draw sets the explicit complete status and winner/tie.
+4. Further draws while complete are rejected.
+5. Replay before round completion is rejected.
+6. Under the chosen replay policy, an unauthorized player cannot replay.
+7. An authorized replay resets all round state.
+8. Replay creates a valid full 52-card server deck while every client/table still receives an empty private deck representation.
+9. `G.playOrder` after replay is a valid permutation of all seats.
+10. `ctx.currentPlayer === G.playOrder[0]` after replay synchronization.
+11. Only that new current player can make the first draw of the new round.
+12. Player and spectator privacy remain correct before reveal, after reveal, after replay, and on reconnect.
 
-- have no `playerID`,
-- have no player credentials,
-- never receive another player's private hand before reveal,
-- never receive the authoritative deck,
-- never receive private historical initial state,
-- never receive random-plugin / PRNG state,
-- never gain access to player moves or host-only lifecycle controls.
+Use the existing real SocketIO test where appropriate instead of relying only on direct move-function tests.
 
-Do not implement privacy by hiding UI elements alone. Preserve the existing server filtering and transport guard.
+## UI acceptance criteria
 
-## Seat / lifecycle requirements
+After the final draw:
 
-Opening one or more public-table clients must not:
+- all players and the table see the same winner/tie result,
+- the round is visibly complete,
+- only a player who is actually authorized to replay sees an actionable replay control,
+- other players see who they are waiting for,
+- the table remains view-only.
 
-- occupy a player seat,
-- change room metadata seat occupancy,
-- affect the host's "all seats filled" start requirement,
-- create credentials,
-- make the table eligible to start/replay/draw as a player.
+After replay:
 
-Add an explicit test assertion for spectator seat neutrality if the current suite does not already prove this directly.
-
-## Acceptance criteria
-
-The task is complete when all of the following are verified:
-
-1. Host creates a room normally.
-2. Guest joins a normal player seat.
-3. A separate browser opens `/?table=<matchID>`.
-4. The table occupies no player seat.
-5. The table can be opened before the game starts and displays the waiting state.
-6. The host can start once actual player seats are filled.
-7. The table updates live as players draw.
-8. Before reveal, the table sees only public draw status / face-down cards and no private rank/suit data.
-9. After reveal, the table shows the public cards and winner/tie.
-10. Player browsers no longer automatically render an embedded second table board.
-11. Existing room creation/joining, QR sharing, privacy, and player gameplay still work.
-12. Both production builds pass.
-13. All automated tests pass.
+- old cards disappear,
+- all public draw slots return to the undrawn state,
+- deck count returns to 52,
+- the UI identifies the correct new first player,
+- no stale winner/reveal state remains.
 
 ## Validation commands
 
@@ -218,7 +174,9 @@ npm run build:client
 npm test
 ```
 
-Then manually verify with at least three browser contexts if possible:
+GitHub CI now runs the same build/test sequence on pushes and pull requests. Local validation is still required before committing; CI is an independent check, not a substitute.
+
+Then manually verify with at least:
 
 ```text
 Browser 1: host/player
@@ -226,29 +184,30 @@ Browser 2: guest/player
 Browser 3: ?table=<matchID>
 ```
 
-If the environment permits, also verify the table URL from a second physical device over LAN.
+Complete one round, confirm replay permissions, replay, then complete at least the first draw of the new round.
 
 ## Scope boundaries
 
-Do not begin any of the following as part of this task:
+Do not include any of the following in this task:
 
-- GameDefinition / user-defined rules,
+- explicit initial-deal redesign (that is the next roadmap decision),
+- GameDefinition / configurable games,
 - generic rule engine,
-- account system,
-- persistence/session recovery,
+- War or Crazy Eights,
+- account/persistence/session recovery,
 - host transfer,
-- deployment hardening,
+- boardgame.io upgrade,
+- hosted deployment work,
+- LAN device validation,
 - elaborate animations,
-- React Router migration,
-- boardgame.io upgrade.
-
-Keep this task narrowly focused on turning the already-existing spectator board into an independently accessible shared table.
+- unrelated UI cleanup.
 
 ## Completion record
 
 After implementation and validation:
 
-1. update `ledger.md` with what changed and what was actually verified,
-2. note any remaining limitations,
-3. commit the completed task,
-4. do not move on to round/replay cleanup in the same task unless explicitly asked.
+1. update `ledger.md` with exactly what changed and what was verified,
+2. record the chosen replay-permission policy,
+3. note any remaining limitation,
+4. commit the completed work,
+5. stop before the initial-deal decision / next roadmap item unless explicitly asked.
