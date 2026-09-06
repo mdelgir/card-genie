@@ -11,7 +11,7 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | Deck and demo rules | Implemented | Standard 52-card deck, shuffle, initial randomized turns, one-card draws, highest-card winner/tie. Initial dealing is not a separate step yet. |
 | Player and spectator privacy | Verified in automated tests | Private deck excluded; own hand only before reveal; public draw status; initial-sync guard removes historical secrets and random state. |
 | Synchronization | Verified locally | Authenticated SocketIO players, spectator/late join, draw, reveal, winner, and replay covered. |
-| Independent table entry | Pending | Table currently mounts alongside a joined player's board. |
+| Independent table entry | Verified locally | `/?table=<matchID>` opens a credential-less public table without consuming a seat. Player pages mount only their own board. |
 | Round completion and replay | Partial | Winner/reveal and replay work; no boardgame.io game-over state; replay button is shown to players who lack the active turn. |
 | Card graphics | Verified visually | All 52 SVG faces, patterned backs, card slots, deck stack, and winner emphasis; desktop/mobile browser checks and private-card labels verified. |
 | Builds | Verified | Both production builds pass; compiled server responds to /games; built client preview returns HTTP 200. |
@@ -64,10 +64,9 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 
 ## Next priorities
 
-1. Provide a standalone public-table entry point.
-2. Make round completion/replay permissions consistent; verify turn order on replay.
-3. Clarify whether Phase 1 needs an initial deal separate from the retained one-card draw action.
-4. Expand rule/authorization tests and verify the complete flow on physical LAN devices and a hosted server.
+1. Make round completion/replay permissions consistent; verify turn order on replay.
+2. Clarify whether Phase 1 needs an initial deal separate from the retained one-card draw action.
+3. Expand rule/authorization tests and verify the complete flow on physical LAN devices and a hosted server.
 
 ## Known limitations
 
@@ -80,3 +79,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 
 - Integrated the remote AGENTS.md and PROJECT_CONTEXT.md additions (through 57978fc) before committing the accumulated implementation work.
 - Revalidated both production builds and all eleven tests. This checkpoint includes privacy repairs, build fixes, project records, the authoritative waiting/start flow, and graphical cards.
+
+## 2026-09-06 — Standalone public table
+
+- Completed the standalone-table brief in NEXT_TASK.md. Open `/?table=<matchID>` directly or use “Open public table” beside a joined player's existing join link and QR code.
+- Table entry mounts only a spectator GameClient, with no player ID or credentials and no player form. Public Lobby metadata validates the room; empty/invalid links show an error with a return link.
+- Removed the embedded second board from player pages and made the standalone table full-width. Disabled the boardgame.io debug panel so public displays expose no debug player/move controls.
+- Preserved the game, server, and transport privacy implementations. Extended the real SocketIO regression test to assert that an additional table does not alter player-seat metadata; existing coverage verifies private hands, deck, historical snapshots, random state, reveal, and replay.
+- Validation: both production builds and all eleven tests pass. Three separate browser tabs verified host creation, guest seat selection/join, table waiting with an empty seat, host start after both player seats filled, live face-down draw progress, public reveal/winner, and one board per player. Empty and nonexistent table IDs show useful errors; full-width felt presentation inspected visually.
+- Physical LAN devices and hosted use remain unverified. Round/replay cleanup and all later roadmap work remain pending; this task does not change them. The previously reported guest-seat selection/retry UX issue is outside this brief and remains unresolved.

@@ -13,12 +13,15 @@ const GameClient = Client({
   game: SimpleCardGame,
   board: GameBoard,
   multiplayer: SocketIO({ server: serverUrl }),
+  debug: false,
 });
 
 export default function App() {
+  const [tableRoom] = useState(() => new URLSearchParams(window.location.search).get("table"));
+  const isTable = tableRoom !== null;
   const [playerID, setPlayerID] = useState("");
   const [playerName, setPlayerName] = useState("Player");
-  const [matchID, setMatchID] = useState("");
+  const [matchID, setMatchID] = useState(() => tableRoom?.trim() ?? "");
   const [numPlayers, setNumPlayers] = useState(2);
   const [playerCredentials, setPlayerCredentials] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,17 +35,18 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
-    if (room) {
+    if (room && !isTable) {
       setMatchID(room);
     }
   }, []);
 
   useEffect(() => {
+    if (isTable) return;
     const roomUrl = `${window.location.origin}/?room=${encodeURIComponent(matchID)}`;
     QRCode.toDataURL(roomUrl, { margin: 1, width: 220 })
       .then(setRoomQr)
       .catch(() => setRoomQr(null));
-  }, [matchID]);
+  }, [matchID, isTable]);
 
   const createRoom = async () => {
     setError(null);
@@ -100,10 +104,15 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app${isTable ? " app--table" : ""}`}>
       <header className="app-masthead"><div className="wordmark"><span aria-hidden="true">♠</span> Card Genie</div><p>A little luck. A great night.</p></header>
       <main>
-        {!joined && (
+        {isTable && <>
+          <section className="join room-share"><p>Public table · Room: <strong>{matchID || "Missing room code"}</strong></p><a href="/">Back to rooms</a></section>
+          {!matchID || seatsError ? <section className="board"><p className="error" role="alert">{!matchID ? "This table link is missing a room code. Ask the host for the public table link." : seatsError}</p></section> :
+            seats.length === 0 ? <p role="status">Loading public table…</p> : <GameClient matchID={matchID} />}
+        </>}
+        {!isTable && !joined && (
           <section className="join">
             <h2>Join a room</h2>
             <label htmlFor="room">
@@ -165,6 +174,7 @@ export default function App() {
         )}
 
         {joined && <section className="join room-share"><p>Room: <strong>{matchID}</strong> — <a href={`/?room=${encodeURIComponent(matchID)}`}>Join link</a></p>
+          <a href={`/?table=${encodeURIComponent(matchID)}`} target="_blank" rel="noopener noreferrer">Open public table</a>
           {roomQr && <div className="qr"><img src={roomQr} alt="Scan to join this room" /></div>}</section>}
         {joined && (
           <GameClient
@@ -173,7 +183,6 @@ export default function App() {
             credentials={playerCredentials ?? undefined}
           />
         )}
-        {joined && <GameClient matchID={matchID} />}
       </main>
     </div>
   );

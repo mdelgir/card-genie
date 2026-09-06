@@ -275,6 +275,7 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
       assert.equal(client.getState()!.G.hasDrawn[first], true);
     });
     // A fresh spectator sync must not reveal history or current hands.
+    const seatsBeforeTable = (await lobby.getMatch(SimpleCardGame.name!, matchID)).players;
     const reconnect = Client({ game: SimpleCardGame, matchID,
       multiplayer: SocketIO({ server: url }), debug: false });
     clients.push(reconnect);
@@ -282,6 +283,8 @@ test("SocketIO never transmits private initial snapshots, including on reconnect
     await waitFor(() => Boolean(reconnect.getState()));
     assertPrivate(reconnect);
     assert.deepEqual(reconnect.getState()!.G.hands, { "0": null, "1": null });
+    assert.deepEqual((await lobby.getMatch(SimpleCardGame.name!, matchID)).players, seatsBeforeTable,
+      "opening another public table must not change player seats");
     const last = clients[0].getState()!.ctx.currentPlayer;
     clients[Number(last)].moves.drawCard();
     await waitFor(() => clients.every(c => c.getState()!.G.revealed));
