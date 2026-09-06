@@ -1,213 +1,247 @@
-# Next Task — Round Completion and Replay Cleanup
+# Next Task — Manual LAN Validation
 
-This file is the focused implementation brief for the next Astra/Codex session. `ledger.md` remains the source of truth for verified project status; update it after this task is completed and tested.
+This is the next Phase 1 validation task. It is intentionally a **manual real-device check**, not an Astra coding task unless the test exposes a bug.
+
+`ledger.md` remains the source of truth. Do not mark LAN validation complete until the full flow has been exercised on physical devices.
 
 ## Objective
 
-Finish the next Phase 1 lifecycle gap: make round completion explicit, make replay permissions match the UI, and prove that replay starts a clean new round with a valid fresh turn order and no privacy regression.
-
-Do **not** begin the user-defined rule engine or broaden the game beyond the existing Highest Card demo.
-
-## Current behavior found in the repository
-
-The existing demo already completes a round functionally:
-
-- each player draws one card,
-- the final draw sets `G.revealed = true`,
-- `G.winner` becomes a player ID or `"tie"`,
-- all cards then become public through `playerView`,
-- `restartGame` reshuffles a full deck, clears hands/progress, reshuffles `playOrder`, and calls `events.endTurn({ next: G.playOrder[0] })`.
-
-However, the lifecycle is still ambiguous:
-
-1. `revealed` currently doubles as both a presentation flag and the effective "round complete" flag.
-2. There is no explicit domain-level round status.
-3. `GameBoard` shows a "Play again" button to every player after reveal, while boardgame.io move authorization still depends on the active/current player. This means some users are shown a control they cannot actually use.
-4. Replay turn order is implemented but needs explicit regression coverage proving that `ctx.currentPlayer`, `G.playOrder`, legal-move ownership, and fresh private state agree after restart.
-
-The standalone public table is already complete. Preserve it.
-
-## Recommended Phase 1 design
-
-### 1. Add explicit round state
-
-Prefer a small domain-level status instead of using `ctx.gameover` for this Phase 1 demo. A suggested shape is:
-
-```ts
-type RoundStatus = "waiting" | "playing" | "complete";
-```
-
-or an equally clear equivalent.
-
-Expected semantics:
-
-- initial room: `waiting`
-- host start: `playing`
-- final draw / winner computed: `complete`
-- replay: `playing`
-
-Keep `revealed` only if it remains useful for rendering/privacy, but do not make UI/lifecycle logic depend on an ambiguous proxy when an explicit status can be used.
-
-Do not introduce boardgame.io `endGame` merely to satisfy the phrase "completed round" if doing so complicates in-match replay. The goal is an explicit authoritative round-complete state, not necessarily a terminal match/gameover state.
-
-### 2. Make replay permission intentional and visible
-
-For the smallest Phase 1 fix, use the existing boardgame.io turn authorization rather than inventing a new lifecycle endpoint.
-
-Recommended policy for this demo:
-
-> The player who is still the authoritative current player when the round completes may start the next round.
-
-That is normally the player who made the final draw.
-
-Update the UI so:
-
-- only the player who is actually allowed to replay gets an enabled "Play again" control,
-- other players see a clear waiting message such as "Waiting for <name> to start the next round",
-- the public table never receives replay controls,
-- an unauthorized/non-current player replay attempt is rejected authoritatively even if they forge a move packet.
-
-If repository inspection reveals a clean, small boardgame.io-native way to allow **all seated players** to replay without weakening move authorization or adding brittle lifecycle logic, that is acceptable, but explain the approach before implementing it. Do not bypass boardgame.io authorization just to make the button work for everyone.
-
-### 3. Make replay a clean new round
-
-After an accepted replay, verify all of the following authoritative state:
+Verify Card Genie on the intended in-person setup:
 
 ```text
-round status     -> playing
-revealed         -> false
-winner           -> null
-hands            -> all null
-hasDrawn         -> all false
-deck             -> fresh full 52-card shuffled deck on server
-deckCount        -> 52 publicly
-playOrder        -> valid permutation of every player ID
-ctx.currentPlayer-> playOrder[0]
+Windows development PC
+  ├─ game server on :8000
+  ├─ Vite client on :5173, exposed to LAN
+  ├─ Phone 1: player
+  ├─ Phone 2: player
+  └─ Tablet / TV / third phone: standalone public table
 ```
 
-The next legal draw must belong to the new first player. A player who is not the new current player must not be able to draw.
+All devices must be on the same local network.
 
-Do not rely only on UI checks; add direct game/network assertions.
+## Before testing
 
-### 4. Preserve privacy across round boundaries
+Pull the latest repository state:
 
-Replay must not expose the fresh deck, card order, random-plugin state, or any player's next-round card through:
-
-- current state,
-- initial/reconnect snapshots,
-- undo/redo history,
-- spectator/table synchronization.
-
-Keep the existing `playerView` allowlist and `PrivateStateSocketIO` regression coverage intact.
-
-### 5. Keep round completion deterministic
-
-On the final draw:
-
-- compute winner/tie once,
-- transition the explicit round status to complete,
-- reveal only because the authoritative round is complete,
-- do not advance into a phantom next turn before replay,
-- do not allow further draws until replay.
-
-## Likely files
-
-The task is expected to focus on:
-
-```text
-games/simple-card-game.ts
-games/simple-card-game.test.ts
-client/src/GameBoard.tsx
-ledger.md
+```powershell
+cd C:\Users\mdelg\Documents\card-genie
+git pull --ff-only
 ```
 
-`server/src/room-server.ts` should probably not need changes if the recommended current-player replay policy is used.
+Optional but recommended sanity check:
 
-`server/src/private-state-transport.ts` should not change unless a new failing privacy regression proves a concrete need.
-
-`client/src/App.tsx`, the standalone table URL, room creation/joining, and QR behavior are out of scope unless a lifecycle bug directly requires a minimal correction.
-
-## Required automated coverage
-
-Add or strengthen tests so they prove at least:
-
-1. The game begins with the explicit non-complete round status.
-2. Host start moves the round to the active/playing status.
-3. The final legal draw sets the explicit complete status and winner/tie.
-4. Further draws while complete are rejected.
-5. Replay before round completion is rejected.
-6. Under the chosen replay policy, an unauthorized player cannot replay.
-7. An authorized replay resets all round state.
-8. Replay creates a valid full 52-card server deck while every client/table still receives an empty private deck representation.
-9. `G.playOrder` after replay is a valid permutation of all seats.
-10. `ctx.currentPlayer === G.playOrder[0]` after replay synchronization.
-11. Only that new current player can make the first draw of the new round.
-12. Player and spectator privacy remain correct before reveal, after reveal, after replay, and on reconnect.
-
-Use the existing real SocketIO test where appropriate instead of relying only on direct move-function tests.
-
-## UI acceptance criteria
-
-After the final draw:
-
-- all players and the table see the same winner/tie result,
-- the round is visibly complete,
-- only a player who is actually authorized to replay sees an actionable replay control,
-- other players see who they are waiting for,
-- the table remains view-only.
-
-After replay:
-
-- old cards disappear,
-- all public draw slots return to the undrawn state,
-- deck count returns to 52,
-- the UI identifies the correct new first player,
-- no stale winner/reveal state remains.
-
-## Validation commands
-
-Run from the repository root:
-
-```bash
+```powershell
 npm run build:server
 npm run build:client
 npm test
 ```
 
-GitHub CI now runs the same build/test sequence on pushes and pull requests. Local validation is still required before committing; CI is an independent check, not a substitute.
+GitHub CI also runs these checks independently.
 
-Then manually verify with at least:
+## 1. Find the PC's LAN IP
 
-```text
-Browser 1: host/player
-Browser 2: guest/player
-Browser 3: ?table=<matchID>
+In PowerShell:
+
+```powershell
+ipconfig
 ```
 
-Complete one round, confirm replay permissions, replay, then complete at least the first draw of the new round.
+Find the active Wi-Fi or Ethernet adapter's **IPv4 Address**. It will usually look like:
 
-## Scope boundaries
+```text
+192.168.1.25
+```
 
-Do not include any of the following in this task:
+Use the real value from your PC below as `<PC-IP>`.
 
-- explicit initial-deal redesign (that is the next roadmap decision),
-- GameDefinition / configurable games,
-- generic rule engine,
-- War or Crazy Eights,
-- account/persistence/session recovery,
-- host transfer,
-- boardgame.io upgrade,
-- hosted deployment work,
-- LAN device validation,
-- elaborate animations,
-- unrelated UI cleanup.
+Do not use `localhost` or `127.0.0.1` from the phones/table device.
 
-## Completion record
+## 2. Start the server
 
-After implementation and validation:
+In one PowerShell window:
 
-1. update `ledger.md` with exactly what changed and what was verified,
-2. record the chosen replay-permission policy,
-3. note any remaining limitation,
-4. commit the completed work,
-5. stop before the initial-deal decision / next roadmap item unless explicitly asked.
+```powershell
+cd C:\Users\mdelg\Documents\card-genie
+npm run dev:server
+```
+
+The game server uses port 8000.
+
+## 3. Start the client exposed to the LAN
+
+In a second PowerShell window:
+
+```powershell
+cd C:\Users\mdelg\Documents\card-genie
+npm --prefix client run dev:host
+```
+
+Vite should expose the client on port 5173.
+
+The client derives the game-server URL from the browser hostname, so a phone opening:
+
+```text
+http://<PC-IP>:5173/
+```
+
+should talk to:
+
+```text
+http://<PC-IP>:8000
+```
+
+without a separate configuration change.
+
+## 4. Confirm basic LAN reachability
+
+From Phone 1, while on the same Wi-Fi, open:
+
+```text
+http://<PC-IP>:5173/
+```
+
+Expected result: the Card Genie room screen loads.
+
+If the page does not load:
+
+- confirm the phone and PC are on the same network,
+- confirm Vite was started with `dev:host`,
+- make sure the network is not a guest/client-isolated Wi-Fi,
+- allow Node.js through Windows Firewall on **Private networks** if Windows prompts,
+- verify the PC's IPv4 address has not changed.
+
+If the page loads but room creation/game synchronization fails, check whether Windows Firewall is blocking port 8000 / the Node server.
+
+## 5. Run the complete physical-device flow
+
+Use at least three physical browser contexts if available.
+
+### Device A — Host/player
+
+Open:
+
+```text
+http://<PC-IP>:5173/
+```
+
+Create a 2-player room.
+
+Confirm:
+
+- the creator occupies the host seat,
+- a room code is shown,
+- the normal player join link / QR is available,
+- an **Open public table** link is available.
+
+### Device B — Guest/player
+
+Join using the room QR/link or:
+
+```text
+http://<PC-IP>:5173/?room=<matchID>
+```
+
+Choose the remaining seat and join.
+
+Confirm the host now sees all player seats filled and can start.
+
+### Device C — Public table
+
+Open the public-table link or:
+
+```text
+http://<PC-IP>:5173/?table=<matchID>
+```
+
+Confirm:
+
+- no player name/seat is requested,
+- the table does not occupy a player seat,
+- no player controls appear,
+- the waiting room/public state is visible before start.
+
+## 6. Start and verify privacy/synchronization
+
+Start the game from the host device.
+
+For the first legal player draw, verify all of the following before the second player draws:
+
+- the drawing player sees their own card face up,
+- the other player does **not** see that rank/suit,
+- the public table does **not** see that rank/suit,
+- the public table shows only that the player has drawn / a face-down card,
+- deck count and turn state update on all devices.
+
+Then complete the second draw.
+
+Confirm:
+
+- all devices transition to round complete,
+- both cards become public only after completion,
+- the same winner/tie appears everywhere,
+- the public table remains view-only.
+
+## 7. Verify replay on physical devices
+
+The final-draw/current player should be the only player allowed to start the next round.
+
+Confirm:
+
+- that player sees an actionable **Play again** button,
+- the other player sees a waiting message instead of an actionable replay control,
+- the table has no replay control,
+- replay clears the old cards and winner,
+- deck count returns to 52,
+- the next round has a valid first player,
+- the first legal draw of the new round again remains private to its owner and face-down/public on the table.
+
+## 8. Basic mobile/table usability check
+
+On the phones and table device, also note:
+
+- any horizontal scrolling,
+- clipped cards/buttons/text,
+- controls too small to tap,
+- unreadable text,
+- table layout that looks poor on a tablet/TV-sized screen,
+- reconnect or synchronization delays that are noticeable in normal use.
+
+Do not redesign anything pre-emptively. Record concrete problems only.
+
+## Pass criteria
+
+LAN validation passes when all of these are true on physical devices:
+
+1. At least two player devices can reach the PC-hosted client.
+2. A separate physical device can open the standalone public table.
+3. Room creation/join/start work over LAN.
+4. The public table consumes no seat.
+5. Private first-draw card data is visible only to its owner.
+6. Public draw progress synchronizes in real time.
+7. Reveal/winner/tie synchronize correctly.
+8. Replay authorization is correct.
+9. Replay starts a clean new round.
+10. The next-round first draw still preserves privacy and synchronization.
+11. The UI is usable on the tested phones/table device.
+
+## If something fails
+
+Do **not** broadly refactor the project.
+
+Record:
+
+- which device/browser failed,
+- the exact URL used,
+- what step failed,
+- any browser/server console error,
+- whether the client page loaded,
+- whether port 5173 worked but port 8000 appeared blocked,
+- whether the issue reproduces on the PC browser itself.
+
+Then use Astra for the smallest fix targeted at that concrete failure.
+
+## After a successful test
+
+Update `ledger.md` to mark physical LAN validation as verified and record the actual devices/browsers used.
+
+Do not begin Phase 2 yet. The remaining Phase 1 acceptance item after LAN validation is the equivalent hosted end-to-end test.
