@@ -44,7 +44,7 @@ export function CrazyEightsBoard({ G, ctx, moves, matchData, playerID, matchID, 
         <ul className="player-card-grid"><li className="player-slot">
           {top ? <PlayingCard variant="face" card={top} size="large" /> : <PlayingCard variant="empty" size="large" />}
           <span className="player-name">Active suit: <span className="active-suit">{G.activeSuit ?? "—"}</span></span>
-          <span className="player-state">Draw pile: {G.deck.length} cards</span>
+          <span className="player-state">Draw pile: {G.deckCount} cards</span>
         </li></ul>
       </section>
 
