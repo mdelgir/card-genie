@@ -19,11 +19,12 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | Hosted validation | Verified | Railway HTTPS frontend/backend deployed successfully. A complete two-player hosted game was played with a PC and phone participating. Hosted transport, room creation/join, authoritative turns, draw/reveal, and game completion worked end-to-end. |
 | Phase 1 | **Complete** | The Phase 1 vertical slice is complete based on combined automated, local browser, physical LAN/table, production-runtime, and Railway-hosted validation. |
 | Phase 2A definition model | **Complete** | Versioned data-only schema, structured validator, and Highest Card reference fixture pass focused tests and JSON round-trip validation; not connected to the live game. |
+| Phase 2B isolated runtime | **Complete** | Validated v0 definitions drive deterministic round setup/actions/outcomes and allowlisted views. Unit-tested; live-game adapter migration remains separate. |
 
 ## Next priorities
 
-1. **Phase 2B — generic authoritative runtime**: interpret validated definitions on the server without trusting client-side rule decisions. Not started in Phase 2A.
-2. Migrate Highest Card to the generic runtime, then prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
+1. Migrate live Highest Card onto the runtime with a thin boardgame.io adapter.
+2. Prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
 
 ## Known limitations / backlog
 
@@ -120,3 +121,11 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - Added `games/definitions/highest-card.ts` as a hand-written compatibility reference only. Added six validator tests covering the reference and JSON round-trip, unsupported versions, identity/required fields, malformed player/count fields, unknown primitives, contradictory multi-card comparison, lowest-wins support, executable/non-data rejection, and deterministic useful errors.
 - Verification: npm run build:server, npm run build:client, and npm test all pass (21 tests, including all 15 prior game/privacy/network/production-configuration tests). The existing test glob discovers the new nested tests without script changes. The reference survives JSON stringify/parse and validates successfully.
 - The live Highest Card game, client, room/session behavior, transport privacy, and boardgame.io version are unchanged. No generic runtime, Game Creator, additional games, persistence, AI rules, or TV layout changes were implemented. Phase 2B remains the next task.
+
+## 2026-09-07 — Phase 2B: isolated authoritative runtime
+
+- Added `games/engine/runtime.ts`. `createGameRuntime` validates unknown definitions and captures a private copy. `startRound` validates unique nonblank seat IDs against the definition's player limits, creates the full standard deck, and accepts injected index-permutation shuffling for the deck and player order. Invalid permutations return structured errors; execution does not call Math.random or store random state.
+- The generic `applyAction(state, authenticatedPlayerID, { type: "draw" })` returns a new authoritative state on success or a structured error without mutation. It enforces seated/current-player ownership, one action per player, card availability and active lifecycle. Definition-driven rank direction supports highest/lowest outcomes, ace high and ties; completion reveals cards without advancing to a phantom next turn.
+- `playerView` constructs fresh allowlisted snapshots: public deck count only, owner-only hands before completion, public hands/winner after reveal, no undealt identities or arbitrary server metadata. Views copy card fields and public collections rather than aliasing authoritative state. Repeating startRound creates clean replay state after the caller authorizes replay.
+- Added six runtime tests for definition/seat validation, deterministic shuffling and invalid permutations, action rejection/non-mutation, full turn progression/completion, highest/lowest/ace/tie outcomes, player/other/spectator views, view isolation, clean replay and definition-copy isolation.
+- Validation: both required production builds and all 27 tests pass, preserving the prior 21 schema/game/privacy/network/production tests. No DSL expansion, live-game migration, UI/session/transport changes, dependency upgrades, or TV work. Runtime callers must supply server-owned state/authenticated identities and authorize start/replay; integrating that contract through boardgame.io is the next task, not part of this isolated runtime delivery.
