@@ -3,7 +3,7 @@ import { LobbyClient } from "boardgame.io/client";
 
 type Seat = { id: number; name?: string };
 
-export function useRoomSeats(serverUrl: string, matchID: string) {
+export function useRoomSeats(serverUrl: string, matchID: string, gameName = "simple-card-game") {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -15,25 +15,25 @@ export function useRoomSeats(serverUrl: string, matchID: string) {
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
       try {
-        const match = await lobby.getMatch("simple-card-game", matchID);
+        const match = await lobby.getMatch(gameName, matchID);
         if (!cancelled) { setSeats(match.players); setError(null); }
       } catch {
-        if (!cancelled) { setSeats([]); setError("Unable to load this room. Check the code and connection."); }
+        if (!cancelled) { setSeats([]); setError("Unable to load this room. Check the code, game, and connection."); }
       } finally {
         if (!cancelled) timer = setTimeout(refresh, 1000);
       }
     };
     void refresh();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [serverUrl, matchID]);
+  }, [serverUrl, matchID, gameName]);
   return { seats, error };
 }
 
-export function WaitingRoom({ serverUrl, matchID, playerID, credentials, isConnected }: {
+export function WaitingRoom({ serverUrl, matchID, playerID, credentials, isConnected, gameName = "simple-card-game" }: {
   serverUrl: string; matchID: string; playerID: string | null;
-  credentials?: string; isConnected: boolean;
+  credentials?: string; isConnected: boolean; gameName?: string;
 }) {
-  const { seats, error: roomError } = useRoomSeats(serverUrl, matchID);
+  const { seats, error: roomError } = useRoomSeats(serverUrl, matchID, gameName);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allSeated = seats.length >= 2 && seats.every(seat => Boolean(seat.name));
