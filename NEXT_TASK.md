@@ -1,170 +1,218 @@
-# Next Task — Phase 2A: GameDefinition v0
+# Next Task — Phase 2B: Generic Authoritative Runtime
 
-Phase 1 is complete. The next task begins the user-defined game architecture, but **does not** build the user-facing Game Creator and **does not** implement the generic runtime yet.
+Phase 1 and Phase 2A are complete. The repository now has a versioned, data-only `GameDefinition` schema, a deterministic validator, and a Highest Card reference definition.
+
+This task builds the **generic authoritative runtime for the currently supported v0 vocabulary only**. Do **not** migrate the live Highest Card boardgame.io game yet; that is the next task after the runtime is proven in isolation.
 
 `ledger.md` remains the source of truth for verified progress. `goals.md` defines the Phase 2 roadmap.
 
 ## Objective
 
-Create a small, versioned, data-only TypeScript schema for configurable card games plus a deterministic validator.
+Implement a small server-side runtime under `games/engine/` that executes a validated `GameDefinition` deterministically and authoritatively.
 
-The schema should be expressive enough to describe the current Highest Card demo and establish the vocabulary needed for the next runtime task, while staying intentionally narrow.
+The runtime should prove that the current Highest Card reference definition is not merely descriptive: the same definition must be sufficient to drive round setup, legal player actions, turn progression, round completion, winner/tie calculation, and public/private views without hard-coding a separate Highest Card rules path.
 
-This phase is about **describing and validating rules**, not executing them.
+The runtime is an engine foundation, not a boardgame.io migration in this task.
 
 ## Core principles
 
-1. `GameDefinition` must be plain serializable data.
-2. Every definition must include `schemaVersion: 1`.
-3. Do not allow functions, callbacks, JavaScript source strings, `eval`, dynamic imports, or arbitrary executable code in a definition.
-4. Unsupported or contradictory rules must fail validation clearly.
-5. Keep the initial vocabulary intentionally small; do not design a speculative universal card-game language.
-6. The schema should support future LAN and hosted play through the same authoritative runtime, but this task must not alter transport or boardgame.io behavior.
+1. **The definition describes the game; the runtime decides what is legal and authoritative.**
+2. The runtime must reject invalid definitions before play begins.
+3. The client must not be trusted to decide legality, turn ownership, hidden information, winner state, or canonical transitions.
+4. Do not execute callbacks, JavaScript source strings, `eval`, dynamic imports, or user-supplied code.
+5. Randomness must be supplied by the authoritative caller through an injectable shuffle/random interface. Do not call `Math.random()` inside rule execution.
+6. Keep the runtime limited to the primitives that Phase 2A actually defines. Do not expand the DSL speculatively.
+7. Keep the code simple enough that the live boardgame.io game can adopt it in the following task without duplicating rules.
 
-## Suggested location
+## Current v0 vocabulary
 
-Prefer a small engine foundation under:
+The Phase 2A schema currently supports:
+
+- one standard 52-card deck,
+- shuffle at round start,
+- 2–8 players,
+- random player order,
+- one explicit `draw` action per player,
+- `next-player` progression,
+- owner-only hands before reveal,
+- reveal at round end,
+- `all-players-acted`,
+- rank comparison,
+- highest-wins or lowest-wins,
+- ace high,
+- ties remain ties.
+
+Implement these semantics faithfully. If the runtime exposes a concrete ambiguity in the schema, make only the smallest schema/validator change needed and add tests for it. Do not add deal/play/discard/scoring merely because they appear in the long-term roadmap.
+
+## Suggested shape
+
+Keep the implementation compact. A reasonable shape is:
 
 ```text
 games/
   engine/
-    types.ts
-    validator.ts
+    types.ts          # existing schema/runtime types as needed
+    validator.ts      # existing validator
+    runtime.ts        # authoritative state + transitions
+    runtime.test.ts   # focused runtime tests
 ```
 
-A small definition fixture/example may live alongside the existing game code or under a clearly named definitions directory if that fits the repository better.
+A small `cards.ts` or `visibility.ts` helper is fine if it materially improves clarity. Do not split the engine into many speculative modules.
 
-Do not add `runtime.ts`, `actions.ts`, `visibility.ts`, or other Phase 2B implementation files unless a tiny shared type is genuinely required for the schema itself.
+## Runtime state
 
-## Required schema shape
+Define a data-only authoritative state sufficient for the current v0 rules. Exact names are flexible, but the runtime needs to represent at least:
 
-Start from the roadmap shape in `goals.md`:
+- lifecycle: playing / complete,
+- authoritative deck contents,
+- public deck count,
+- player order,
+- current player / turn position,
+- whether each player has acted,
+- private hand/card for each player,
+- reveal state,
+- winner player ID or tie.
 
-```ts
-type GameDefinition = {
-  schemaVersion: 1;
-  id: string;
-  name: string;
-  players: { min: number; max: number };
-  setup: SetupDefinition;
-  visibility: VisibilityDefinition;
-  turn: TurnDefinition;
-  roundEnd: ConditionDefinition;
-  winner: WinnerDefinition;
-};
-```
+Do not put credentials, sockets, room metadata, or UI state in the game runtime.
 
-The exact nested representation should use discriminated/tagged unions where useful and remain straightforward to serialize as JSON.
+## Round creation
 
-## Initial rule vocabulary
+Provide a clear entry point that starts a round from:
 
-Keep v0 limited to primitives needed for Highest Card plus a sensible small foundation for the next examples. The roadmap currently names primitives such as:
+- a definition (validated at the boundary),
+- an explicit list of seated player IDs,
+- an authoritative shuffle/random provider.
 
-- shuffle
-- deal
-- draw
-- play-card
-- discard
-- reveal
-- next-player
-- compare-rank
-- highest-wins
-- lowest-wins
-- all-players-acted
-- score-points
+Requirements:
 
-Do not force every primitive into production types if it cannot yet be defined cleanly. Prefer a coherent minimal vocabulary over placeholder fields with vague semantics.
+- player count must satisfy the definition's min/max,
+- create exactly one standard 52-card deck for `standard-52`,
+- shuffle the deck according to the definition,
+- randomize player order according to the definition,
+- begin with empty private hands,
+- begin with no winner and no public reveal,
+- set a valid current player from the authoritative play order.
 
-At minimum, the schema must be able to represent the current Highest Card behavior conceptually:
+For deterministic tests, allow a fixed/seeded or explicit shuffle implementation to be injected.
 
-- standard 52-card deck,
-- 2+ supported players,
-- shuffle at round start,
-- each player explicitly draws one private card on their legal turn,
-- drawn cards remain private until round reveal,
-- round ends after every player has acted,
-- compare ranks,
-- highest rank wins,
-- ties are representable,
-- replay/next-round behavior is not encoded as executable code.
+## Player actions
 
-## Validator requirements
+Provide a generic action entry point rather than a `highestCardDraw()` function.
 
-Add a deterministic validator that accepts unknown input and returns a clear result rather than throwing for ordinary malformed definitions.
+For the current v0 definition, support the `draw` action and enforce all legality server-side:
 
-Prefer a structured result such as:
+- only while the round is playing,
+- only the authoritative current player may act,
+- the action must be permitted by the definition,
+- a player may not perform the one-card draw twice,
+- the deck must contain the required card,
+- the draw count and semantics come from the validated definition,
+- accepted actions update only authoritative state,
+- rejected actions must not mutate state.
 
-```ts
-{
-  ok: false,
-  errors: [
-    { path: "players.min", code: "invalid-range", message: "..." }
-  ]
-}
-```
+Return a structured accepted/rejected result rather than throwing for ordinary illegal player actions. Include a stable rejection code useful to a future boardgame.io adapter and UI.
 
-Exact naming is flexible, but callers must be able to identify where and why a definition is invalid.
+## Turn progression and round end
 
-Validation should cover at least:
+Drive progression from the definition:
 
-- unsupported `schemaVersion`,
-- missing or invalid `id` / `name`,
-- invalid player counts and `min > max`,
-- malformed/unknown tagged rule primitives,
-- invalid numeric/count fields,
-- obviously contradictory Highest-Card-style combinations where the schema makes those contradictions detectable,
-- definitions that contain unsupported executable/function values.
+- after an accepted non-final action, advance according to `next-player`,
+- `all-players-acted` completes the round exactly when every seated player has acted,
+- do not advance past the final actor when the round completes,
+- mark the round complete and reveal cards at the configured reveal point.
 
-Do not attempt deep semantic theorem-proving. Reject what can be checked clearly and leave runtime-dependent legality to Phase 2B.
+Do not encode room-host or replay authorization here. Session lifecycle permissions remain a server/boardgame.io concern. The runtime may expose a clean way to initialize another fresh round after the caller authorizes replay.
 
-## Highest Card reference definition
+## Winner calculation
 
-Add one hand-written `GameDefinition` representing the current Highest Card demo as a schema/validator compatibility fixture.
+Use the definition, not a Highest Card-specific branch name.
 
-Important:
+Implement:
 
-- It is a **definition fixture/reference**, not a migration of the live game yet.
-- The existing `simple-card-game` implementation must continue to run exactly as it does now.
-- Do not wire this definition into boardgame.io in this task.
+- `compare-rank`,
+- ace high,
+- `highest-wins`,
+- `lowest-wins`,
+- equal best ranks => `tie`,
+- suits do not break ties.
 
-The reference definition should pass the validator and survive a JSON stringify/parse round trip.
+Winner calculation should happen only when the configured round-end condition is satisfied.
+
+## Visibility / player views
+
+Add a generic runtime view/filter operation driven by the definition's visibility rules.
+
+For v0:
+
+- deck contents are server-only,
+- public viewers receive deck count but never deck card identities,
+- before round-end reveal, a player receives only their own hand/card,
+- another player's hand is absent or masked,
+- a spectator receives no private hand identities,
+- after reveal, all hands/cards are public,
+- winner and public lifecycle fields are visible.
+
+The view must be a newly constructed allowlisted data object; do not return the authoritative state and rely on callers to hide fields later.
+
+This is a second privacy boundary for the future generic engine. Do not modify or weaken the existing `PrivateStateSocketIO` protection in this task.
 
 ## Tests
 
-Add focused unit tests for the schema/validator. Cover at least:
+Add focused runtime tests. At minimum cover:
 
-1. the Highest Card reference definition is valid,
-2. JSON round-trip remains valid,
-3. unsupported schema version is rejected,
-4. malformed player ranges are rejected,
-5. unknown rule primitive is rejected,
-6. malformed primitive fields are rejected,
-7. function/executable values are rejected,
-8. validation produces useful paths/messages or codes.
+1. Highest Card reference definition initializes a valid 52-card round for 2 players.
+2. Runtime refuses an invalid definition.
+3. Player counts below/above the definition range are rejected.
+4. Injected deterministic shuffle controls deck and/or turn order reproducibly.
+5. Correct current player can draw exactly once.
+6. Out-of-turn, duplicate, malformed, or unsupported actions are rejected without state mutation.
+7. Turn advances after a legal non-final draw.
+8. Final required draw completes the round without advancing past the final actor.
+9. Highest-wins produces the correct winner.
+10. Equal best ranks produce a tie.
+11. Lowest-wins works from the same runtime using only a changed definition.
+12. Spectator and other-player views cannot see a private first draw.
+13. Owner view can see its own private draw.
+14. Completed-round views reveal all cards and winner.
+15. Starting a fresh authorized round produces clean hands/winner/reveal state and a full shuffled deck.
 
-Preserve all existing Phase 1 rule/privacy/network tests.
+Preserve every existing Phase 1 and Phase 2A test.
+
+## Relationship to boardgame.io
+
+Do **not** replace `games/simple-card-game.ts` in this task.
+
+The current live game remains the production compatibility baseline. Phase 2B should make the engine ready so the following task can migrate Highest Card onto it with a thin boardgame.io adapter.
+
+In particular, do not:
+
+- register a second production boardgame.io game,
+- change room creation or hosted/LAN routing,
+- change move packet authorization,
+- change replay permissions,
+- change `PrivateStateSocketIO`,
+- change the current client action UI.
 
 ## Scope boundaries
 
 Do **not** in this task:
 
+- migrate the live Highest Card game,
+- build War or Crazy Eights,
 - build the Game Creator UI,
-- build a generic rule runtime,
-- migrate the live Highest Card game to the new engine,
-- add War or Crazy Eights,
 - add persistence/database storage,
 - add AI-generated rules,
-- change room/session behavior,
-- change privacy transport,
+- add arbitrary expression evaluation,
 - upgrade boardgame.io,
+- redesign room/session behavior,
 - address the low-priority TV layout issue.
 
 ## Before coding
 
-1. Read `AGENTS.md`, `goals.md`, `ledger.md`, `README.md`, and `PROJECT_CONTEXT.md`.
-2. Inspect the current `/games` layout and tests.
-3. Briefly state the proposed schema shape and files you expect to add/change.
-4. Keep the implementation small enough that Phase 2B can evolve it after Highest Card, War, and Crazy Eights expose real requirements.
+1. Read `AGENTS.md`, `goals.md`, `ledger.md`, `README.md`, `PROJECT_CONTEXT.md`, and this file.
+2. Inspect `games/engine/types.ts`, `games/engine/validator.ts`, `games/definitions/highest-card.ts`, and `games/simple-card-game.ts`.
+3. Briefly state the proposed runtime API, authoritative state shape, and files you expect to change.
+4. Prefer pure/deterministic transition functions where practical so rule behavior can be tested independently of boardgame.io and networking.
 
 ## Validation
 
@@ -176,24 +224,26 @@ npm run build:client
 npm test
 ```
 
-Also verify the Highest Card definition round-trips through JSON and validates successfully.
+Also verify that all pre-existing tests still pass and that the live Highest Card implementation is unchanged.
 
 Update `ledger.md` with exactly what was implemented and verified.
 
 Commit the completed work.
 
-Do not move on to Phase 2B in the same task.
+Do not move on to the live Highest Card migration in the same task.
 
 ## Pass criteria
 
-Phase 2A is complete when:
+Phase 2B is complete when:
 
-1. a versioned `GameDefinition` TypeScript model exists,
-2. definitions are plain data and contain no executable rule hooks,
-3. malformed/unsupported definitions are rejected with structured validation errors,
-4. a hand-written Highest Card definition validates and JSON-round-trips,
-5. the current live Highest Card game remains unchanged and all Phase 1 tests still pass,
-6. builds/tests pass,
-7. `ledger.md` records the result.
+1. a validated `GameDefinition` can initialize authoritative runtime state,
+2. legal actions are interpreted from the definition rather than a game-specific function,
+3. illegal actions are rejected without mutating canonical state,
+4. turn progression, round completion, reveal, winner/tie, and fresh-round behavior work for the v0 definition,
+5. generic visibility filtering protects private hands and deck contents,
+6. highest-wins and lowest-wins are both proven through the same runtime,
+7. deterministic injected randomness is tested,
+8. the live boardgame.io Highest Card game remains unchanged,
+9. all builds/tests pass and `ledger.md` records the result.
 
-After that, the next task will be **Phase 2B — generic authoritative runtime**.
+After that, the next task is **Phase 2C — migrate the live Highest Card game onto the generic runtime with a thin boardgame.io adapter**.
