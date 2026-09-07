@@ -11,7 +11,6 @@ export function validateGameDefinition(input: unknown): ValidationResult {
   };
   const join = (path: string, key: string) => path ? `${path}.${key}` : key;
   const ancestors = new Set<object>();
-  // Definitions are tiny. Bound traversal to reject cycles/deep malformed input.
   let visited = 0;
   const dataOnly = (value: unknown, path: string, depth = 0): boolean => {
     if (++visited > 2000 || depth > 32) {
@@ -52,7 +51,6 @@ export function validateGameDefinition(input: unknown): ValidationResult {
   try {
     if (!dataOnly(input, "")) return { ok: false, errors };
   } catch {
-    // Exotic non-JSON objects (e.g. revoked proxies) may throw on inspection.
     error("", "non-data", "Definition cannot be inspected as plain data.");
     return { ok: false, errors };
   }
@@ -82,7 +80,8 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     choice(result.type, `${path}.type`, types, "unsupported-rule");
     return result;
   };
-  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner", "battle"]);
+
+  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner", "battle", "handPlay"]);
   choice(root.schemaVersion, "schemaVersion", [1], "unsupported-version");
   if (typeof root.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(root.id) || root.id.length > 64) {
     error("id", "invalid-value", "Expected a lowercase kebab-case identifier of 1–64 characters.");
@@ -96,20 +95,34 @@ export function validateGameDefinition(input: unknown): ValidationResult {
   if (minValid && maxValid && (players.min as number) > (players.max as number)) {
     error("players.max", "invalid-range", "Maximum players must be at least minimum players.");
   }
+
   const paired = Object.prototype.hasOwnProperty.call(root, "battle");
-  const setup = object(root.setup, "setup", ["deck", "roundStart", ...(paired ? ["deal"] : [])]);
+  const matching = Object.prototype.hasOwnProperty.call(root, "handPlay");
+  if (paired && matching) error("handPlay", "contradictory-rule", "Battle and persistent-hand play modes cannot be combined in v0.");
+
+  const setupKeys = ["deck", "roundStart",
+    ...((paired || matching) ? ["deal"] : []), ...(matching ? ["discard"] : [])];
+  const setup = object(root.setup, "setup", setupKeys);
   choice(setup.deck, "setup.deck", ["standard-52"]);
   tagged(setup.roundStart, "setup.roundStart", ["shuffle"]);
+
+  if (paired || matching) {
+    const deal = tagged(setup.deal, "setup.deal", ["deal-equal"], ["count", "face", "order"]);
+    const countValid = integer(deal.count, "setup.deal.count", 1, 52);
+    if (paired && countValid && deal.count !== 26) {
+      error("setup.deal.count", "contradictory-rule", "Two battle piles must exhaust the standard deck: 26 cards each.");
+    }
+    if (matching && countValid && deal.count !== 5) {
+      error("setup.deal.count", "unsupported-rule", "Matching-discard v0 deals exactly five cards to each player.");
+    }
+    choice(deal.face, "setup.deal.face", ["down"]);
+    choice(deal.order, "setup.deal.order", ["round-robin"]);
+  }
+
   if (paired) {
     if (players.min !== 2 || players.max !== 2) {
       error("players", "contradictory-rule", "Paired contributions require exactly two players.");
     }
-    const deal = tagged(setup.deal, "setup.deal", ["deal-equal"], ["count", "face", "order"]);
-    if (integer(deal.count, "setup.deal.count", 1, 52) && deal.count !== 26) {
-      error("setup.deal.count", "contradictory-rule", "Two piles must exhaust the standard deck: 26 cards each.");
-    }
-    choice(deal.face, "setup.deal.face", ["down"]);
-    choice(deal.order, "setup.deal.order", ["round-robin"]);
     const battle = tagged(root.battle, "battle", ["compare-contributions"], ["comparison", "direction", "ace", "collect", "ties"]);
     choice(battle.comparison, "battle.comparison", ["compare-rank"]);
     choice(battle.direction, "battle.direction", ["highest-wins"]);
@@ -126,24 +139,57 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     choice(ties.insufficient, "battle.ties.insufficient", ["lose"]);
     choice(ties.bothInsufficient, "battle.ties.bothInsufficient", ["tie"]);
   }
-  const visibility = object(root.visibility, "visibility", ["deck", "hand", "reveal"]);
+
+  if (matching) {
+    if (players.min !== 2 || players.max !== 4) {
+      error("players", "unsupported-rule", "Matching-discard v0 supports the configured 2–4 player range.");
+    }
+    const discard = tagged(setup.discard, "setup.discard", ["seed-discard"], ["count", "face"]);
+    if (integer(discard.count, "setup.discard.count", 1, 1)) choice(discard.count, "setup.discard.count", [1]);
+    choice(discard.face, "setup.discard.face", ["up"]);
+    const handPlay = tagged(root.handPlay, "handPlay", ["matching-discard"], ["legal", "wild", "fallback"]);
+    const legal = tagged(handPlay.legal, "handPlay.legal", ["match-suit-or-rank"], ["wildRank"]);
+    choice(legal.wildRank, "handPlay.legal.wildRank", ["8"]);
+    const wild = tagged(handPlay.wild, "handPlay.wild", ["choose-suit"], ["rank"]);
+    choice(wild.rank, "handPlay.wild.rank", ["8"]);
+    const fallback = tagged(handPlay.fallback, "handPlay.fallback", ["draw-if-no-legal-play"], ["count", "after"]);
+    if (integer(fallback.count, "handPlay.fallback.count", 1, 52) && fallback.count !== 1) {
+      error("handPlay.fallback.count", "unsupported-rule", "Matching-discard v0 draws exactly one fallback card.");
+    }
+    choice(fallback.after, "handPlay.fallback.after", ["end-turn"]);
+  }
+
+  const visibility = object(root.visibility, "visibility", ["deck", "hand", "reveal",
+    ...(matching ? ["handCount", "discard"] : [])]);
   choice(visibility.deck, "visibility.deck", ["server-only"]);
   choice(visibility.hand, "visibility.hand", [paired ? "server-only" : "owner-only"]);
+  if (matching) {
+    choice(visibility.handCount, "visibility.handCount", ["public"]);
+    choice(visibility.discard, "visibility.discard", ["top-public"]);
+  }
   const reveal = tagged(visibility.reveal, "visibility.reveal", ["reveal"], ["when"]);
-  choice(reveal.when, "visibility.reveal.when", [paired ? "contribution" : "round-end"]);
+  choice(reveal.when, "visibility.reveal.when", [paired ? "contribution" : matching ? "discard" : "round-end"]);
+
   const turn = object(root.turn, "turn", ["order", "action", "progression"]);
-  choice(turn.order, "turn.order", [paired ? "seat-order" : "random"]);
-  const action = tagged(turn.action, "turn.action", [paired ? "reveal-top" : "draw"], ["count"]);
-  const countValid = integer(action.count, "turn.action.count", 1, 52);
+  choice(turn.order, "turn.order", [paired || matching ? "seat-order" : "random"]);
+  let actionCount: number | undefined;
+  if (matching) {
+    tagged(turn.action, "turn.action", ["play-or-draw"]);
+  } else {
+    const action = tagged(turn.action, "turn.action", [paired ? "reveal-top" : "draw"], ["count"]);
+    if (integer(action.count, "turn.action.count", 1, 52)) actionCount = action.count;
+  }
   tagged(turn.progression, "turn.progression", [paired ? "next-battle" : "next-player"]);
-  tagged(root.roundEnd, "roundEnd", [paired ? "all-cards-owned" : "all-players-acted"]);
-  const winner = tagged(root.winner, "winner", paired ? ["all-cards-owner"] : ["highest-wins", "lowest-wins"], paired ? [] : ["comparison", "ace", "ties"]);
-  if (!paired) {
+  tagged(root.roundEnd, "roundEnd", [paired ? "all-cards-owned" : matching ? "empty-hand" : "all-players-acted"]);
+
+  const winner = tagged(root.winner, "winner", paired ? ["all-cards-owner"] : matching ? ["first-empty-hand"] : ["highest-wins", "lowest-wins"],
+    paired || matching ? [] : ["comparison", "ace", "ties"]);
+  if (!paired && !matching) {
     choice(winner.comparison, "winner.comparison", ["compare-rank"]);
     choice(winner.ace, "winner.ace", ["high"]);
     choice(winner.ties, "winner.ties", ["tie"]);
   }
-  if (countValid && action.count !== 1 && (paired || winner.comparison === "compare-rank")) {
+  if (actionCount !== undefined && actionCount !== 1) {
     error("turn.action.count", "contradictory-rule", "Rank comparison requires one card per player; multi-card aggregation is undefined in v0.");
   }
   return errors.length ? { ok: false, errors } : { ok: true, definition: input as GameDefinition };
