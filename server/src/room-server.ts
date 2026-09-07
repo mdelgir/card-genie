@@ -3,6 +3,8 @@ import { Server } from "boardgame.io/server";
 import { Master } from "boardgame.io/master";
 import { SimpleCardGame } from "../../games/simple-card-game";
 import { PrivateStateSocketIO } from "./private-state-transport";
+import { readServerConfig, isAllowedOrigin } from "./config";
+import type { ServerOptions } from "socket.io";
 
 class RoomTransport extends PrivateStateSocketIO {
   override init(...args: Parameters<PrivateStateSocketIO["init"]>) {
@@ -33,14 +35,22 @@ class RoomTransport extends PrivateStateSocketIO {
   }
 }
 
-export function createCardGenieServer() {
-  const transport = new RoomTransport();
-  const server = Server({ games: [SimpleCardGame], transport, origins: [/.*/], apiOrigins: [/.*/],
+export function createCardGenieServer(config = readServerConfig()) {
+  const { origins } = config;
+  const transport = new RoomTransport({ socketOpts: {
+    // Override boardgame.io 0.50.2's `cors.origins` with SocketIO's actual option.
+    cors: { origin: origins },
+    // CORS alone does not restrict direct WebSocket handshakes.
+    allowRequest: (request, callback) => callback(null, isAllowedOrigin(request.headers.origin, origins)),
+  // The pinned boardgame.io types require full options, but SocketIO supplies defaults.
+  } as ServerOptions });
+  const server = Server({ games: [SimpleCardGame], transport, origins, apiOrigins: origins,
     // Opaque creator credentials cannot be acquired by reclaiming a vacated host seat.
     generateCredentials: ctx => `${ctx.path === "/games/simple-card-game/create" ? "host" : "player"}_${randomUUID()}`,
   });
 
   server.app.use(async (ctx, next) => {
+    if (!isAllowedOrigin(ctx.headers.origin, origins)) ctx.throw(403, "Origin is not allowed.");
     if (ctx.method === "POST" && ctx.path === "/games/simple-card-game/create") {
       await next();
       if (ctx.status !== 200) return;

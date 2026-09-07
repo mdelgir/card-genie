@@ -71,7 +71,7 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 ## Known limitations
 
 - Room credentials currently live in React memory; a browser refresh does not restore the player session.
-- Development server CORS is permissive; hosted deployment configuration still needs review.
+- Development server CORS is permissive by default; production requires an explicit allowed-origin list. Real hosted validation remains pending (see HOSTING.md).
 - The SocketIO guard is specific to the pinned boardgame.io version. Keep the initial-snapshot regression test when changing dependencies. The library's unguarded Local transport is for tests here, not a privacy-safe deployment substitute.
 - No Phase 1 user-defined rule engine or elaborate animations are planned.
 
@@ -104,3 +104,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - The draw itself is the demo's deal mechanic and intentionally exercises authoritative turn ownership, private-card delivery, public draw progress, real-time synchronization, and reveal/winner behavior.
 - This is a product/rule decision, not an implementation gap. No code change is required for Phase 1.
 - Future configurable games may choose automatic setup dealing as part of `GameDefinition`; this decision does not constrain Phase 2 rule design.
+
+## 2026-09-07 — Hosted configuration readiness
+
+- Pulled latest main before implementation. The user is performing physical LAN validation and reports that phone and TV browsers reach the app; the full physical-device flow is not marked complete here. NEXT_TASK.md remains the manual LAN brief. TV layout work and Phase 2 were not undertaken.
+- Added validated runtime PORT (default 8000) and exact comma-separated ALLOWED_ORIGINS. NODE_ENV=production requires a nonempty allowlist; development keeps permissive LAN access when no list is supplied. API requests carrying disallowed origins are rejected before room mutations. Origin-less health checks/non-browser clients remain supported and still require credentials for authorized actions.
+- Applied the same list to boardgame.io API CORS and explicit SocketIO `cors.origin` plus `allowRequest`, correcting the pinned library's ineffective `cors.origins` option and checking direct WebSocket handshakes. Preserved boardgame.io 0.50.2, room lifecycle, rule authorization, and PrivateStateSocketIO filtering.
+- All client connections already use the shared serverUrl: SocketIO, Lobby, room creation, and host start. Trimmed explicit VITE_SERVER_URL whitespace/trailing slashes and retained the automatic browser-hostname port-8000 LAN fallback. Added provider-neutral HOSTING.md covering build/runtime variables, HTTPS/WebSockets, existing start path, single-instance in-memory limits, and the real hosted acceptance flow.
+- Validation: npm run build:server, npm run build:client, and npm test pass (15 tests). New tests cover port/origin validation, production failure without origins, development LAN defaults, allowed API preflight/creation, rejected origins, unchanged creator authorization, polling CORS headers, allowed/denied polling and WebSocket connections, and filtered spectator sync. All 13 prior game/privacy/network tests remain passing. A separate client production build with an explicit HTTPS backend URL also passes.
+- The compiled non-default-port startup command (NODE_ENV=production, PORT=9123, ALLOWED_ORIGINS=http://localhost:4174, npm --prefix server start) was rejected by automatic approval review without a stated reason. That compiled runtime check remains unverified; automated tests successfully started the source server with production origin configuration on ephemeral ports. No real hosted deployment was performed, and hosted end-to-end acceptance is still pending.

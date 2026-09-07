@@ -51,6 +51,7 @@ For LAN development, use the host machine's LAN address on every device; the Vit
 - [goals.md](goals.md): product goals, Phase 1 acceptance criteria, architecture constraints, and later direction.
 - [ledger.md](ledger.md): current progress, dated changes, validation, and next priorities. Update after meaningful work.
 - [LOG.md](LOG.md): original development history.
+- [HOSTING.md](HOSTING.md): production port/origin configuration and static-frontend + Node-backend deployment instructions.
 
 The Vite scripts use the module-runner config loader. Both development mode and production preview have been verified locally. An earlier directory-access error was specific to a restricted Windows Codex session.
 

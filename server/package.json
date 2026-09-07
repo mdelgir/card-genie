@@ -7,7 +7,7 @@
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/server/src/index.js",
-    "test": "node --test --require ts-node/register/transpile-only ../games/**/*.test.ts"
+    "test": "node --test --require ts-node/register/transpile-only ../games/**/*.test.ts src/**/*.test.ts"
   },
   "dependencies": {
     "boardgame.io": "0.50.2"

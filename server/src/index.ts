@@ -1,3 +1,5 @@
 import { createCardGenieServer } from "./room-server";
+import { readServerConfig } from "./config";
 
-createCardGenieServer().run(8000);
+const config = readServerConfig();
+createCardGenieServer(config).run(config.port);
