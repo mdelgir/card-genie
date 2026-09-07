@@ -10,6 +10,8 @@
     "dev:client": "npm --prefix client run dev",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "start:web": "npm --prefix client run preview -- --host 0.0.0.0 --port $PORT",
     "test": "npm --prefix server run test"
   },
   "overrides": {
