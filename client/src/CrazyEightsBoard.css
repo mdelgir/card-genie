@@ -1,0 +1,54 @@
+.crazy-hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.7rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-choice {
+  appearance: none;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  padding: 0.2rem;
+  cursor: pointer;
+}
+
+.card-choice:hover:not(:disabled),
+.card-choice:focus-visible:not(:disabled) {
+  border-color: currentColor;
+  transform: translateY(-3px);
+}
+
+.card-choice:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.crazy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.crazy-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.crazy-controls select {
+  border-radius: 7px;
+  padding: 0.45rem 0.6rem;
+}
+
+.active-suit {
+  font-weight: 700;
+  text-transform: capitalize;
+}
