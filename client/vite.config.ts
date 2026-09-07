@@ -16,4 +16,9 @@ export default defineConfig({
       allow: [".."],
     },
   },
+  preview: {
+    // Hosted preview/proxy health checks use provider-assigned Host headers.
+    // This preview server is only used for Phase 1 hosted validation.
+    allowedHosts: true,
+  },
 });
