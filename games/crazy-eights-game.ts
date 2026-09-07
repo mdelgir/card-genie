@@ -6,6 +6,7 @@ import { crazyEightsDefinition } from "./definitions/crazy-eights";
 
 export interface CrazyEightsGameState {
   deck: Card[];
+  deckCount: number;
   hands: Record<string, Card[]>;
   discard: Card[];
   discardTop: Card | null;
@@ -29,12 +30,10 @@ const copyWinner = (winner: Winner): Winner => winner === null ? null :
 const toRound = (G: CrazyEightsGameState, currentPlayer = G.playOrder[0]): RoundState => ({
   deck: G.deck.map(copyCard),
   hands: Object.fromEntries(Object.entries(G.hands).map(([id, cards]) => [id, cards.map(copyCard)])),
-  playOrder: [...G.playOrder],
-  currentPlayer,
+  playOrder: [...G.playOrder], currentPlayer,
   hasActed: Object.fromEntries(G.playOrder.map(id => [id, false])),
   roundStatus: G.roundStatus === "waiting" ? "playing" : G.roundStatus,
-  revealed: false,
-  winner: copyWinner(G.winner),
+  revealed: false, winner: copyWinner(G.winner),
   discard: G.discard.map(copyCard),
   ...(G.activeSuit ? { activeSuit: G.activeSuit } : {}),
 });
@@ -42,13 +41,10 @@ const toRound = (G: CrazyEightsGameState, currentPlayer = G.playOrder[0]): Round
 const acceptRound = (G: CrazyEightsGameState, round: RoundState) => {
   const discard = (round.discard ?? []).map(copyCard);
   Object.assign(G, {
-    deck: round.deck.map(copyCard),
+    deck: round.deck.map(copyCard), deckCount: round.deck.length,
     hands: Object.fromEntries(Object.entries(round.hands).map(([id, cards]) => [id, cards.map(copyCard)])),
-    discard,
-    discardTop: discard.length ? copyCard(discard[discard.length - 1]) : null,
-    activeSuit: round.activeSuit ?? null,
-    started: true,
-    roundStatus: round.roundStatus,
+    discard, discardTop: discard.length ? copyCard(discard[discard.length - 1]) : null,
+    activeSuit: round.activeSuit ?? null, started: true, roundStatus: round.roundStatus,
     playOrder: [...round.playOrder],
     handCounts: Object.fromEntries(round.playOrder.map(id => [id, round.hands[id].length])),
     winner: copyWinner(round.winner),
@@ -56,14 +52,11 @@ const acceptRound = (G: CrazyEightsGameState, round: RoundState) => {
 };
 
 const visibleFields = (view: RoundView) => ({
-  deck: [] as Card[],
+  deck: [] as Card[], deckCount: view.deckCount,
   hands: Object.fromEntries(Object.entries(view.hands).map(([id, cards]) => [id, cards.map(copyCard)])),
-  discard: [] as Card[],
-  discardTop: view.discardTop ? copyCard(view.discardTop) : null,
-  activeSuit: view.activeSuit ?? null,
-  playOrder: [...view.playOrder],
-  handCounts: { ...(view.handCounts ?? {}) },
-  winner: copyWinner(view.winner),
+  discard: [] as Card[], discardTop: view.discardTop ? copyCard(view.discardTop) : null,
+  activeSuit: view.activeSuit ?? null, playOrder: [...view.playOrder],
+  handCounts: { ...(view.handCounts ?? {}) }, winner: copyWinner(view.winner),
 });
 
 export const CrazyEightsGame: Game<CrazyEightsGameState> = {
@@ -76,8 +69,8 @@ export const CrazyEightsGame: Game<CrazyEightsGameState> = {
   setup: ({ ctx }): CrazyEightsGameState => {
     const playOrder = Array.from({ length: ctx.numPlayers }, (_, index) => String(index));
     return {
-      deck: [], hands: Object.fromEntries(playOrder.map(id => [id, []])), discard: [], discardTop: null,
-      activeSuit: null, started: false, roundStatus: "waiting", playOrder,
+      deck: [], deckCount: 0, hands: Object.fromEntries(playOrder.map(id => [id, []])),
+      discard: [], discardTop: null, activeSuit: null, started: false, roundStatus: "waiting", playOrder,
       handCounts: Object.fromEntries(playOrder.map(id => [id, 0])), winner: null,
     };
   },
@@ -88,8 +81,7 @@ export const CrazyEightsGame: Game<CrazyEightsGameState> = {
         if (G.started || ctx.phase !== "waiting" || playerID !== "0") return INVALID_MOVE;
         const result = runtime.startRound(Object.keys(G.hands), indices => random.Shuffle(indices));
         if (!result.ok) return INVALID_MOVE;
-        acceptRound(G, result.state);
-        events.setPhase("playing");
+        acceptRound(G, result.state); events.setPhase("playing");
       },
     },
     playCard: {
@@ -122,8 +114,7 @@ export const CrazyEightsGame: Game<CrazyEightsGameState> = {
         const seats = Array.from({ length: ctx.numPlayers }, (_, index) => String(index));
         const result = runtime.startRound(seats, indices => random.Shuffle(indices));
         if (!result.ok) return INVALID_MOVE;
-        acceptRound(G, result.state);
-        events.setPhase("playing");
+        acceptRound(G, result.state); events.setPhase("playing");
         return G;
       },
     },
