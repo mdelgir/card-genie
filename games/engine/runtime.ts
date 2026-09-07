@@ -49,13 +49,8 @@ const copyWinner = (winner: Winner): Winner => winner === null ? null :
   winner.type === "tie" ? { type: "tie" } : { type: "player", playerID: winner.playerID };
 
 export interface GameRuntime {
-  /** Caller authorizes start/replay and supplies server-owned seat IDs.
-   * Calling again creates a clean round; it never modifies a previous round.
-   */
   startRound(playerIDs: readonly string[], shuffle: Shuffle): RuntimeResult;
-  /** State and authenticated player identity must come from the server, never a client payload. */
   applyAction(state: RoundState, playerID: string | null, action: unknown): RuntimeResult;
-  /** Use for every outbound snapshot, including spectator reconnects. */
   playerView(state: RoundState, playerID?: string | null): RoundView;
 }
 
@@ -63,8 +58,13 @@ export function createGameRuntime(input: unknown):
   { ok: true; runtime: GameRuntime } | { ok: false; errors: ValidationError[] } {
   const validation = validateGameDefinition(input);
   if (!validation.ok) return validation;
-  // Caller edits to the reference definition cannot change an initialized runtime.
+  // Schema acceptance deliberately leads runtime support. Refuse partial execution.
+  if (validation.definition.handPlay) return { ok: false, errors: [{
+    path: "handPlay", code: "unsupported-rule",
+    message: "Persistent matching-hand execution is not implemented by the current runtime yet.",
+  }] };
   const definition = structuredClone(validation.definition);
+  const actionCount = "count" in definition.turn.action ? definition.turn.action.count : 0;
   const permute = <T>(items: T[], shuffle: Shuffle): T[] => {
     const indices = shuffle(items.map((_, index) => index));
     if (!Array.isArray(indices) || indices.length !== items.length || new Set(indices).size !== items.length ||
@@ -79,7 +79,6 @@ export function createGameRuntime(input: unknown):
           Array.from(playerIDs).some(id => typeof id !== "string" || !id.trim()) || new Set(playerIDs).size !== playerIDs.length) {
         return reject("invalid-players", `Provide ${definition.players.min}–${definition.players.max} unique nonblank player IDs.`);
       }
-      // Validation admits only a standard deck and the supported ordering modes.
       const cards = suits.flatMap(suit => ranks.map((rank, index) => ({ suit, rank, value: index + 2 })));
       let deck: Card[], playOrder: string[];
       try {
@@ -95,15 +94,13 @@ export function createGameRuntime(input: unknown):
         }
       }
       return { ok: true, state: {
-        deck, playOrder, currentPlayer: playOrder[0],
-        hands,
+        deck, playOrder, currentPlayer: playOrder[0], hands,
         hasActed: Object.fromEntries(playerIDs.map(id => [id, false])),
         roundStatus: "playing", revealed: false, winner: null,
         ...(definition.battle ? { battle: { pot: [], contributions: [], result: null } } : {}),
       } };
     },
     applyAction(state, playerID, action) {
-      // No arguments are supported by the v0 draw action. Do not invoke getters.
       if (!action || typeof action !== "object" || Object.getPrototypeOf(action) !== Object.prototype ||
           Reflect.ownKeys(action).length !== 1 ||
           Object.getOwnPropertyDescriptor(action, "type")?.value !== definition.turn.action.type) {
@@ -119,7 +116,7 @@ export function createGameRuntime(input: unknown):
         const battle: BattleState = { pot: [], contributions: [], result: null };
         next.battle = battle;
         let faceDown = 0;
-        let faceUp = definition.turn.action.count;
+        let faceUp = actionCount;
         while (true) {
           const unable = next.playOrder.filter(id => next.hands[id].length < faceDown + faceUp);
           if (unable.length) {
@@ -128,7 +125,6 @@ export function createGameRuntime(input: unknown):
               next.winner = { type: "tie" };
             } else {
               const winner = next.playOrder.find(id => !unable.includes(id))!;
-              // Existing winning pile, chronological pot, then losing remainder.
               next.hands[winner].push(...battle.pot);
               battle.pot = [];
               for (const id of unable) next.hands[winner].push(...next.hands[id].splice(0));
@@ -160,7 +156,6 @@ export function createGameRuntime(input: unknown):
           faceDown = rules.ties.faceDown;
           faceUp = rules.ties.faceUp;
         }
-        // Piles stay secret even after completion; only contributions are public.
         next.revealed = false;
         next.hasActed = Object.fromEntries(next.playOrder.map(id => [id, false]));
         if (next.roundStatus === "playing") {
@@ -168,14 +163,13 @@ export function createGameRuntime(input: unknown):
         }
         return { ok: true, state: next };
       }
-      if (state.deck.length < definition.turn.action.count) return reject("empty-deck", "Not enough cards to draw.");
+      if (state.deck.length < actionCount) return reject("empty-deck", "Not enough cards to draw.");
       const next = structuredClone(state);
-      next.hands[playerID] = next.deck.splice(0, definition.turn.action.count);
+      next.hands[playerID] = next.deck.splice(0, actionCount);
       next.hasActed[playerID] = true;
-      // all-players-acted ends the round before next-player progression.
       if (next.playOrder.every(id => next.hasActed[id])) {
         next.roundStatus = "complete";
-        next.revealed = true; // v0 reveal.when is round-end
+        next.revealed = true;
         const values = next.playOrder.map(id => ranks.indexOf(next.hands[id][0].rank));
         const best = definition.winner.type === "highest-wins" ? Math.max(...values) : Math.min(...values);
         const winners = next.playOrder.filter((_, index) => values[index] === best);
@@ -186,7 +180,6 @@ export function createGameRuntime(input: unknown):
       return { ok: true, state: next };
     },
     playerView(state, playerID) {
-      // Never spread authoritative state: future private fields must not leak.
       const pilesHidden = definition.visibility.hand === "server-only";
       const revealed = !pilesHidden && state.roundStatus === "complete" && state.revealed;
       return {
