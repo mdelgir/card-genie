@@ -58,6 +58,7 @@ test("matching-discard requires closed generic legal/wild/fallback semantics", (
     ["handPlay.wild.rank", "9", false],
     ["handPlay.fallback.count", 2, false],
     ["handPlay.fallback.after", "continue-turn", false],
+    ["handPlay.fallback.emptyDeck", "pass", false],
     ["setup.discard", undefined, true],
     ["handPlay.legal", undefined, true],
   ] as const) rejects(changed(path, value, remove), path);
@@ -70,11 +71,7 @@ test("matching-discard requires closed generic legal/wild/fallback semantics", (
   rejects(extra, "handPlay.callback");
 });
 
-test("schema may validate before execution support without partial runtime behavior", () => {
+test("validated matching-discard definition initializes the generic runtime", () => {
   assert.ok(validateGameDefinition(crazyEightsDefinition).ok);
-  const runtime = createGameRuntime(crazyEightsDefinition);
-  assert.equal(runtime.ok, false);
-  if (!runtime.ok) {
-    assert.ok(runtime.errors.some(error => error.path === "handPlay" && error.code === "unsupported-rule"));
-  }
+  assert.ok(createGameRuntime(crazyEightsDefinition).ok);
 });
