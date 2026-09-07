@@ -92,7 +92,10 @@ export function createCardGenieServer(config = readServerConfig()) {
     await transport.getMatchQueue(matchID).add(async () => {
       const { state, metadata } = await server.db.fetch(matchID, { state: true, metadata: true });
       const game = metadata?.gameName ? gamesByName.get(metadata.gameName) : undefined;
-      if (!state || !metadata || !game) ctx.throw(404, "Room not found.");
+      if (!state || !metadata || !game) {
+        ctx.throw(404, "Room not found.");
+        return;
+      }
       if (!credentials.startsWith("host_") || !metadata.players["0"]?.credentials ||
           !await server.auth.authenticateCredentials({ playerID: "0", credentials, metadata })) {
         ctx.throw(403, "Only the room creator can start the game.");
