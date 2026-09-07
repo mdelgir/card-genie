@@ -38,9 +38,6 @@ export interface TurnDefinition {
 
 export type ConditionDefinition = { type: "all-players-acted" | "all-cards-owned" | "empty-hand" };
 
-/** Compare each player's sole card, 2 < ... < 10 < J < Q < K < A.
- * Equal best ranks produce a tie; suits never break ties.
- */
 export type WinnerDefinition = {
   type: "highest-wins" | "lowest-wins";
   comparison: "compare-rank";
@@ -48,10 +45,6 @@ export type WinnerDefinition = {
   ties: "tie";
 } | { type: "all-cards-owner" } | { type: "first-empty-hand" };
 
-/** Paired contributions are atomic: all seats contribute top cards together.
- * Pot order is chronological contribution order, then seat order within each
- * contribution (all of a seat's face-down cards followed by its face-up card).
- */
 export interface BattleDefinition {
   type: "compare-contributions";
   comparison: "compare-rank";
@@ -71,18 +64,16 @@ export interface BattleDefinition {
  * when its suit or rank matches the active suit/rank. The configured wild rank
  * is always legal and requires choosing the next active suit. The initial active
  * suit is the starter discard's suit. The fallback draw is legal only when the
- * player has no legal card and ends the turn immediately.
+ * player has no legal card and ends the turn immediately. If no draw card exists,
+ * this v0 variant ends tied rather than silently passing or inventing a reshuffle.
  */
 export interface HandPlayDefinition {
   type: "matching-discard";
   legal: { type: "match-suit-or-rank"; wildRank: "8" };
   wild: { type: "choose-suit"; rank: "8" };
-  fallback: { type: "draw-if-no-legal-play"; count: 1; after: "end-turn" };
+  fallback: { type: "draw-if-no-legal-play"; count: 1; after: "end-turn"; emptyDeck: "tie" };
 }
 
-/** A new round repeats setup and turn ordering. Permission to start/replay a
- * round belongs to the session lifecycle, not executable hooks in this data.
- */
 export interface GameDefinition {
   schemaVersion: 1;
   id: string;
