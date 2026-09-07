@@ -9,13 +9,13 @@ export type Shuffle = (indices: number[]) => number[];
 export type Winner = { type: "player"; playerID: string } | { type: "tie" } | null;
 export interface Contribution { playerID: string; card: Card }
 export interface BattleState {
-  pot: Card[]; // server-only, retained on a terminal tie
-  contributions: Contribution[]; // only face-up cards from the latest battle
+  pot: Card[];
+  contributions: Contribution[];
   result: Winner;
 }
 export interface RoundState {
-  deck: Card[]; // server-only
-  hands: Record<string, Card[]>; // private until reveal
+  deck: Card[];
+  hands: Record<string, Card[]>;
   playOrder: string[];
   currentPlayer: string;
   hasActed: Record<string, boolean>;
@@ -23,6 +23,8 @@ export interface RoundState {
   revealed: boolean;
   winner: Winner;
   battle?: BattleState;
+  discard?: Card[];
+  activeSuit?: Suit;
 }
 export interface RoundView {
   deckCount: number;
@@ -37,6 +39,9 @@ export interface RoundView {
   potCount?: number;
   contributions?: Contribution[];
   battleResult?: Winner;
+  handCounts?: Record<string, number>;
+  discardTop?: Card | null;
+  activeSuit?: Suit;
 }
 type ErrorCode = "invalid-players" | "invalid-shuffle" | "invalid-action" |
   "unknown-player" | "round-complete" | "already-acted" | "out-of-turn" | "empty-deck";
@@ -45,6 +50,7 @@ export type RuntimeResult = { ok: true; state: RoundState } |
 const reject = (code: ErrorCode, message: string): RuntimeResult => ({ ok: false, error: { code, message } });
 const ranks: Rank[] = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 const suits: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
+const copyCard = (card: Card): Card => ({ suit: card.suit, rank: card.rank, value: card.value });
 const copyWinner = (winner: Winner): Winner => winner === null ? null :
   winner.type === "tie" ? { type: "tie" } : { type: "player", playerID: winner.playerID };
 
@@ -58,11 +64,6 @@ export function createGameRuntime(input: unknown):
   { ok: true; runtime: GameRuntime } | { ok: false; errors: ValidationError[] } {
   const validation = validateGameDefinition(input);
   if (!validation.ok) return validation;
-  // Schema acceptance deliberately leads runtime support. Refuse partial execution.
-  if (validation.definition.handPlay) return { ok: false, errors: [{
-    path: "handPlay", code: "unsupported-rule",
-    message: "Persistent matching-hand execution is not implemented by the current runtime yet.",
-  }] };
   const definition = structuredClone(validation.definition);
   const actionCount = "count" in definition.turn.action ? definition.turn.action.count : 0;
   const permute = <T>(items: T[], shuffle: Shuffle): T[] => {
@@ -93,14 +94,96 @@ export function createGameRuntime(input: unknown):
           for (const id of playerIDs) hands[id].push(deck.shift()!);
         }
       }
+      let matchingState: Pick<RoundState, "discard" | "activeSuit"> | undefined;
+      if (definition.handPlay) {
+        const starter = deck.shift();
+        if (!starter) return reject("empty-deck", "A public starter card is required after the initial deal.");
+        matchingState = { discard: [starter], activeSuit: starter.suit };
+      }
       return { ok: true, state: {
         deck, playOrder, currentPlayer: playOrder[0], hands,
         hasActed: Object.fromEntries(playerIDs.map(id => [id, false])),
         roundStatus: "playing", revealed: false, winner: null,
         ...(definition.battle ? { battle: { pot: [], contributions: [], result: null } } : {}),
+        ...(matchingState ?? {}),
       } };
     },
     applyAction(state, playerID, action) {
+      if (definition.handPlay) {
+        let keys: PropertyKey[];
+        let type: unknown;
+        let cardIndex: unknown;
+        let chosenSuit: unknown;
+        try {
+          if (!action || typeof action !== "object" || Object.getPrototypeOf(action) !== Object.prototype) {
+            return reject("invalid-action", "Expected a plain play-card or draw action.");
+          }
+          keys = Reflect.ownKeys(action);
+          if (keys.some(key => typeof key !== "string")) return reject("invalid-action", "Action fields must be plain strings.");
+          const value = (key: string) => {
+            const descriptor = Object.getOwnPropertyDescriptor(action, key);
+            return descriptor && descriptor.enumerable && "value" in descriptor ? descriptor.value : undefined;
+          };
+          type = value("type");
+          cardIndex = value("cardIndex");
+          chosenSuit = value("suit");
+        } catch {
+          return reject("invalid-action", "Action could not be inspected as plain data.");
+        }
+        const isDraw = type === "draw" && keys.length === 1 && keys[0] === "type";
+        const isPlay = type === "play-card" && (keys.length === 2 || keys.length === 3) &&
+          keys.includes("type") && keys.includes("cardIndex") && keys.every(key => ["type", "cardIndex", "suit"].includes(key as string)) &&
+          Number.isInteger(cardIndex);
+        if (!isDraw && !isPlay) return reject("invalid-action", "Expected {type:'draw'} or {type:'play-card', cardIndex, suit?}.");
+        if (playerID === null || !state.playOrder.includes(playerID)) return reject("unknown-player", "Only a seated player may act.");
+        if (state.roundStatus !== "playing") return reject("round-complete", "Start a new round before acting.");
+        if (state.currentPlayer !== playerID) return reject("out-of-turn", "Wait for this player's turn.");
+        const discard = state.discard;
+        const activeSuit = state.activeSuit;
+        if (!discard?.length || !activeSuit || !suits.includes(activeSuit)) {
+          return reject("invalid-action", "Matching-hand state is missing its discard top or active suit.");
+        }
+        const top = discard[discard.length - 1];
+        const legal = (card: Card) => card.rank === definition.handPlay!.legal.wildRank ||
+          card.suit === activeSuit || card.rank === top.rank;
+        const hand = state.hands[playerID];
+        if (!hand) return reject("unknown-player", "Only a seated player may act.");
+
+        if (isPlay) {
+          const index = cardIndex as number;
+          if (index < 0 || index >= hand.length) return reject("invalid-action", "Card index is outside the authenticated player's hand.");
+          const card = hand[index];
+          if (!legal(card)) return reject("invalid-action", "That card does not match the active suit/rank and is not wild.");
+          const wild = card.rank === definition.handPlay.wild.rank;
+          if (wild && !suits.includes(chosenSuit as Suit)) return reject("invalid-action", "A wild card requires a valid chosen suit.");
+          if (!wild && keys.includes("suit")) return reject("invalid-action", "Only a wild card may choose the active suit.");
+          const next = structuredClone(state);
+          const [played] = next.hands[playerID].splice(index, 1);
+          next.discard!.push(played);
+          next.activeSuit = wild ? chosenSuit as Suit : played.suit;
+          if (next.hands[playerID].length === 0) {
+            next.roundStatus = "complete";
+            next.winner = { type: "player", playerID };
+          } else {
+            const indexInOrder = next.playOrder.indexOf(playerID);
+            next.currentPlayer = next.playOrder[(indexInOrder + 1) % next.playOrder.length];
+          }
+          return { ok: true, state: next };
+        }
+
+        if (hand.some(legal)) return reject("invalid-action", "Draw is allowed only when the player has no legal card.");
+        const next = structuredClone(state);
+        if (next.deck.length < definition.handPlay.fallback.count) {
+          next.roundStatus = "complete";
+          next.winner = { type: "tie" };
+          return { ok: true, state: next };
+        }
+        next.hands[playerID].push(...next.deck.splice(0, definition.handPlay.fallback.count));
+        const indexInOrder = next.playOrder.indexOf(playerID);
+        next.currentPlayer = next.playOrder[(indexInOrder + 1) % next.playOrder.length];
+        return { ok: true, state: next };
+      }
+
       if (!action || typeof action !== "object" || Object.getPrototypeOf(action) !== Object.prototype ||
           Reflect.ownKeys(action).length !== 1 ||
           Object.getOwnPropertyDescriptor(action, "type")?.value !== definition.turn.action.type) {
@@ -180,12 +263,28 @@ export function createGameRuntime(input: unknown):
       return { ok: true, state: next };
     },
     playerView(state, playerID) {
+      if (definition.handPlay) {
+        const top = state.discard?.length ? copyCard(state.discard[state.discard.length - 1]) : null;
+        return {
+          deckCount: state.deck.length,
+          hands: Object.fromEntries(state.playOrder.map(id => [id,
+            id === playerID ? state.hands[id].map(copyCard) : [],
+          ])),
+          playOrder: [...state.playOrder], currentPlayer: state.currentPlayer,
+          hasActed: Object.fromEntries(state.playOrder.map(id => [id, state.hasActed[id]])),
+          roundStatus: state.roundStatus, revealed: false,
+          winner: state.roundStatus === "complete" ? copyWinner(state.winner) : null,
+          handCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])),
+          discardTop: top,
+          activeSuit: state.activeSuit,
+        };
+      }
       const pilesHidden = definition.visibility.hand === "server-only";
       const revealed = !pilesHidden && state.roundStatus === "complete" && state.revealed;
       return {
         deckCount: state.deck.length,
         hands: Object.fromEntries(state.playOrder.map(id => [id,
-          !pilesHidden && (revealed || id === playerID) ? state.hands[id].map(card => ({ suit: card.suit, rank: card.rank, value: card.value })) : [],
+          !pilesHidden && (revealed || id === playerID) ? state.hands[id].map(copyCard) : [],
         ])),
         playOrder: [...state.playOrder], currentPlayer: state.currentPlayer,
         hasActed: Object.fromEntries(state.playOrder.map(id => [id, state.hasActed[id]])),
@@ -194,9 +293,7 @@ export function createGameRuntime(input: unknown):
         ...(definition.battle ? {
           pileCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])),
           potCount: state.battle?.pot.length ?? 0,
-          contributions: (state.battle?.contributions ?? []).map(({ playerID, card }) => ({
-            playerID, card: { suit: card.suit, rank: card.rank, value: card.value },
-          })),
+          contributions: (state.battle?.contributions ?? []).map(({ playerID, card }) => ({ playerID, card: copyCard(card) })),
           battleResult: copyWinner(state.battle?.result ?? null),
         } : {}),
       };
