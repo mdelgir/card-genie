@@ -24,7 +24,7 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 
 ## Next priorities
 
-1. Extend the generic runtime to execute the War definition; schema support is complete, execution is not.
+1. Wire War into the playable app with a thin adapter/UI; generic runtime execution is complete.
 2. Prove the abstraction further with Crazy Eights before building the user-facing Game Creator.
 
 ## Known limitations / backlog
@@ -147,3 +147,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - Validator rejects incomplete or mixed draw/paired definitions, unsupported counts/order/tie policies, incompatible visibility and outcomes, unknown fields, and executable values. Added four tests covering JSON round-trip, identity independence, deterministic non-mutating errors, missing fields, contradictory rules and non-invocation of accessors/callbacks.
 - Validation: `npm run build:server`, `npm run build:client`, and `npm test` pass (37 tests, including all 33 previous Highest Card/runtime/privacy/network/configuration tests). No runtime, live-game, UI, room, transport or dependency files changed. No browser or hosted checks were needed for this schema-only task.
 - War is not registered or playable. Schema acceptance does not mean the existing draw runtime can execute these primitives; do not pass this fixture to it until the next runtime task is complete. Next task: generic runtime support for this definition; not started here.
+
+## 2026-09-07 — Execute paired battles in the generic runtime
+
+- The generic runtime now executes warDefinition through its validated primitives, without game-name branching. Setup shuffles once, deals 26 cards per seat round-robin, preserves seat order, and leaves the deck empty. Existing hands serve as server-only ordered piles.
+- reveal-top resolves an entire battle atomically, including repeated three-down/one-up ties. Pot collection preserves chronological contribution/seat order and appends without reshuffling. A sole insufficient player loses; simultaneous insufficiency ends tied with the pot retained privately. All-52 ownership completes normally. Card conservation is covered in each outcome fixture.
+- Clarified next-battle authorization: first seat starts, each nonterminal battle advances cyclically, terminal battles retain the acting seat. Contribution order always follows seat order. Illegal identities/actions/turns and completed-round actions reject without mutation.
+- Added optional battle state and allowlisted public pile/pot counts, latest face-up contributions and battle result. Player and spectator views hide every pile and face-down identity even at completion; copied views cannot mutate authoritative state. New setup clears prior results. Highest Card state/view shape and behavior remain compatible.
+- Verification: npm run build:server, npm run build:client, and npm test pass (44 tests). Seven new runtime tests cover deal/privacy, ordinary collection, repeated ties, insufficient outcomes, all-card ownership, deterministic progression, fresh setup, view isolation and rejection non-mutation. All 37 previous tests, including real SocketIO/privacy regressions, still pass.
+- No playable War registration, UI, room, transport, dependencies or deployment changes. War browser/network integration is not yet implemented or verified. Next task is the thin playable adapter/UI; stopped before that work.

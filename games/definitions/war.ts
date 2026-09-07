@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Schema fixture only; the current draw runtime does not execute this definition. */
+/** Executable by the generic runtime; not yet registered in the playable app. */
 export const warDefinition = {
   schemaVersion: 1,
   id: "war",

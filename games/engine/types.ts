@@ -26,7 +26,9 @@ export interface TurnDefinition {
    */
   action: { type: "draw" | "reveal-top"; count: number };
   /** next-player advances seats; next-battle repeats paired reveals after pot
-   * collection. Ties resolve fully before progression. Terminal checks run first.
+   * collection and passes current-player authorization to the next seat cyclically.
+   * The first seat starts. Ties resolve fully before progression; terminal battles
+   * retain the acting seat. Authorization does not affect contribution ordering.
    */
   progression: { type: "next-player" | "next-battle" };
 }
@@ -71,7 +73,6 @@ export interface BattleDefinition {
 
 /** A new round repeats setup and turn ordering. Permission to start/replay a
  * round belongs to the session lifecycle, not executable hooks in this data.
- * The paired contribution vocabulary is schema-only until runtime support lands.
  * all-cards-owned ends only when one seat owns the complete deck (including any
  * awarded pot); both-insufficient is an explicit terminal tie exception. Cycles
  * are possible: no turn limit, reshuffle or cycle adjudication is implied.
