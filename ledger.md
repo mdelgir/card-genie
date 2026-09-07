@@ -24,7 +24,8 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 
 ## Next priorities
 
-1. Prove the abstraction with War, then Crazy Eights, before building the user-facing Game Creator.
+1. Extend the generic runtime to execute the War definition; schema support is complete, execution is not.
+2. Prove the abstraction further with Crazy Eights before building the user-facing Game Creator.
 
 ## Known limitations / backlog
 
@@ -138,3 +139,11 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - Added six equivalence tests covering 2, 3, and 8 players, winner/tie outcomes, setup/shuffle, draw/turn progression, rejected moves without mutation, replay, and all player/unknown/spectator views. Existing seeded multiplayer replay, real SocketIO authorization, historical snapshot privacy, reconnect, and production-origin regressions still pass.
 - Validation: `npm run build:server`, `npm run build:client`, and `npm test` passed (33 tests). Started the compiled backend on port 8001 and the local Vite client on 5174. Two separate player tabs plus a public-table tab verified create/join/start, a first private draw, synchronized deck counts/turns, public reveal/winner, final-player-only replay controls, fresh 52-card replay with changed turn order, a new private draw, and a reopened spectator showing only face-down public progress. Test browsers and servers were stopped afterward.
 - Browser checks verify presentation; automated SocketIO tests verify private data is absent from transmitted snapshots/history. This migration was not deployed or retested on physical LAN devices; those checks remain for a later deployment. No next-game or roadmap work was begun. Next task: War to stress the abstraction.
+
+## 2026-09-07 — War schema extension
+
+- Extended the data-only schema/validator with equal face-down round-robin dealing, paired top-card reveals, rank comparison, ordered whole-pot append, repeated tie contributions, insufficient-card loss, and all-card ownership completion. Added `games/definitions/war.ts`: exactly two players, 26 cards each, ace high, three face-down plus one face-up on every tie. No game-name dispatch or executable hooks.
+- Documented deterministic queue/deal/pot ordering, atomic contributions, face-down identity privacy, and collection without reshuffling. A sole player unable to contribute loses and transfers their cards/pot to the opponent; simultaneous inability explicitly ends tied. Cycles are possible; no new cycle adjudication or turn limit is implied.
+- Validator rejects incomplete or mixed draw/paired definitions, unsupported counts/order/tie policies, incompatible visibility and outcomes, unknown fields, and executable values. Added four tests covering JSON round-trip, identity independence, deterministic non-mutating errors, missing fields, contradictory rules and non-invocation of accessors/callbacks.
+- Validation: `npm run build:server`, `npm run build:client`, and `npm test` pass (37 tests, including all 33 previous Highest Card/runtime/privacy/network/configuration tests). No runtime, live-game, UI, room, transport or dependency files changed. No browser or hosted checks were needed for this schema-only task.
+- War is not registered or playable. Schema acceptance does not mean the existing draw runtime can execute these primitives; do not pass this fixture to it until the next runtime task is complete. Next task: generic runtime support for this definition; not started here.

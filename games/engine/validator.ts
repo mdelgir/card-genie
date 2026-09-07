@@ -82,7 +82,7 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     choice(result.type, `${path}.type`, types, "unsupported-rule");
     return result;
   };
-  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner"]);
+  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner", "battle"]);
   choice(root.schemaVersion, "schemaVersion", [1], "unsupported-version");
   if (typeof root.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(root.id) || root.id.length > 64) {
     error("id", "invalid-value", "Expected a lowercase kebab-case identifier of 1–64 characters.");
@@ -96,25 +96,54 @@ export function validateGameDefinition(input: unknown): ValidationResult {
   if (minValid && maxValid && (players.min as number) > (players.max as number)) {
     error("players.max", "invalid-range", "Maximum players must be at least minimum players.");
   }
-  const setup = object(root.setup, "setup", ["deck", "roundStart"]);
+  const paired = Object.prototype.hasOwnProperty.call(root, "battle");
+  const setup = object(root.setup, "setup", ["deck", "roundStart", ...(paired ? ["deal"] : [])]);
   choice(setup.deck, "setup.deck", ["standard-52"]);
   tagged(setup.roundStart, "setup.roundStart", ["shuffle"]);
+  if (paired) {
+    if (players.min !== 2 || players.max !== 2) {
+      error("players", "contradictory-rule", "Paired contributions require exactly two players.");
+    }
+    const deal = tagged(setup.deal, "setup.deal", ["deal-equal"], ["count", "face", "order"]);
+    if (integer(deal.count, "setup.deal.count", 1, 52) && deal.count !== 26) {
+      error("setup.deal.count", "contradictory-rule", "Two piles must exhaust the standard deck: 26 cards each.");
+    }
+    choice(deal.face, "setup.deal.face", ["down"]);
+    choice(deal.order, "setup.deal.order", ["round-robin"]);
+    const battle = tagged(root.battle, "battle", ["compare-contributions"], ["comparison", "direction", "ace", "collect", "ties"]);
+    choice(battle.comparison, "battle.comparison", ["compare-rank"]);
+    choice(battle.direction, "battle.direction", ["highest-wins"]);
+    choice(battle.ace, "battle.ace", ["high"]);
+    const collect = tagged(battle.collect, "battle.collect", ["append-pot"], ["order"]);
+    choice(collect.order, "battle.collect.order", ["contribution-order"]);
+    const ties = tagged(battle.ties, "battle.ties", ["repeat-contribution"], ["faceDown", "faceUp", "insufficient", "bothInsufficient"]);
+    if (integer(ties.faceDown, "battle.ties.faceDown", 0, 51) && ties.faceDown !== 3) {
+      error("battle.ties.faceDown", "unsupported-rule", "Only three face-down tie contributions are currently specified.");
+    }
+    if (integer(ties.faceUp, "battle.ties.faceUp", 1, 52) && ties.faceUp !== 1) {
+      error("battle.ties.faceUp", "contradictory-rule", "Rank comparison requires exactly one face-up card per seat.");
+    }
+    choice(ties.insufficient, "battle.ties.insufficient", ["lose"]);
+    choice(ties.bothInsufficient, "battle.ties.bothInsufficient", ["tie"]);
+  }
   const visibility = object(root.visibility, "visibility", ["deck", "hand", "reveal"]);
   choice(visibility.deck, "visibility.deck", ["server-only"]);
-  choice(visibility.hand, "visibility.hand", ["owner-only"]);
+  choice(visibility.hand, "visibility.hand", [paired ? "server-only" : "owner-only"]);
   const reveal = tagged(visibility.reveal, "visibility.reveal", ["reveal"], ["when"]);
-  choice(reveal.when, "visibility.reveal.when", ["round-end"]);
+  choice(reveal.when, "visibility.reveal.when", [paired ? "contribution" : "round-end"]);
   const turn = object(root.turn, "turn", ["order", "action", "progression"]);
-  choice(turn.order, "turn.order", ["random"]);
-  const action = tagged(turn.action, "turn.action", ["draw"], ["count"]);
+  choice(turn.order, "turn.order", [paired ? "seat-order" : "random"]);
+  const action = tagged(turn.action, "turn.action", [paired ? "reveal-top" : "draw"], ["count"]);
   const countValid = integer(action.count, "turn.action.count", 1, 52);
-  tagged(turn.progression, "turn.progression", ["next-player"]);
-  tagged(root.roundEnd, "roundEnd", ["all-players-acted"]);
-  const winner = tagged(root.winner, "winner", ["highest-wins", "lowest-wins"], ["comparison", "ace", "ties"]);
-  choice(winner.comparison, "winner.comparison", ["compare-rank"]);
-  choice(winner.ace, "winner.ace", ["high"]);
-  choice(winner.ties, "winner.ties", ["tie"]);
-  if (countValid && action.count !== 1 && winner.comparison === "compare-rank") {
+  tagged(turn.progression, "turn.progression", [paired ? "next-battle" : "next-player"]);
+  tagged(root.roundEnd, "roundEnd", [paired ? "all-cards-owned" : "all-players-acted"]);
+  const winner = tagged(root.winner, "winner", paired ? ["all-cards-owner"] : ["highest-wins", "lowest-wins"], paired ? [] : ["comparison", "ace", "ties"]);
+  if (!paired) {
+    choice(winner.comparison, "winner.comparison", ["compare-rank"]);
+    choice(winner.ace, "winner.ace", ["high"]);
+    choice(winner.ties, "winner.ties", ["tie"]);
+  }
+  if (countValid && action.count !== 1 && (paired || winner.comparison === "compare-rank")) {
     error("turn.action.count", "contradictory-rule", "Rank comparison requires one card per player; multi-card aggregation is undefined in v0.");
   }
   return errors.length ? { ok: false, errors } : { ok: true, definition: input as GameDefinition };
