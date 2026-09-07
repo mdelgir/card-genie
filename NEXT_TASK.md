@@ -1,247 +1,120 @@
-# Next Task — Manual LAN Validation
+# Next Task — Hosted End-to-End Validation
 
-This is the next Phase 1 validation task. It is intentionally a **manual real-device check**, not an Astra coding task unless the test exposes a bug.
+This is the final Phase 1 acceptance task. The physical LAN flow has now been exercised manually on real devices, and the compiled production server has been verified on a non-default port. Do **not** begin Phase 2 until this hosted check passes.
 
-`ledger.md` remains the source of truth. Do not mark LAN validation complete until the full flow has been exercised on physical devices.
+`ledger.md` remains the source of truth and should be updated after the hosted validation succeeds.
+
+## Already verified
+
+- Local multi-browser gameplay and privacy.
+- Standalone public table entry.
+- Physical LAN reachability from phones and a TV browser.
+- Full LAN create/join/start/draw/reveal/replay flow.
+- Production server configuration for `PORT`, `ALLOWED_ORIGINS`, and `VITE_SERVER_URL`.
+- Compiled production server startup on `PORT=9123` with `NODE_ENV=production` and an explicit allowed origin.
+- `GET /games` returned HTTP 200 with `["simple-card-game"]` on the compiled custom-port server.
+- GitHub CI passes the production builds and 15 automated tests.
+
+A low-priority TV viewport/layout issue is tracked separately in GitHub issue #1 and is not a Phase 1 blocker.
 
 ## Objective
 
-Verify Card Genie on the intended in-person setup:
+Deploy the current repository revision to a real HTTPS-hosted environment and verify the same authoritative multiplayer flow over the public internet.
+
+Use a simple two-service shape:
 
 ```text
-Windows development PC
-  ├─ game server on :8000
-  ├─ Vite client on :5173, exposed to LAN
-  ├─ Phone 1: player
-  ├─ Phone 2: player
-  └─ Tablet / TV / third phone: standalone public table
+HTTPS static frontend
+  -> VITE_SERVER_URL
+HTTPS Node / boardgame.io backend
+  -> one long-lived instance with WebSocket upgrades
 ```
 
-All devices must be on the same local network.
+See `HOSTING.md` for provider-neutral production requirements.
 
-## Before testing
+## Backend requirements
 
-Pull the latest repository state:
-
-```powershell
-cd C:\Users\mdelg\Documents\card-genie
-git pull --ff-only
-```
-
-Optional but recommended sanity check:
-
-```powershell
-npm run build:server
-npm run build:client
-npm test
-```
-
-GitHub CI also runs these checks independently.
-
-## 1. Find the PC's LAN IP
-
-In PowerShell:
-
-```powershell
-ipconfig
-```
-
-Find the active Wi-Fi or Ethernet adapter's **IPv4 Address**. It will usually look like:
+Set:
 
 ```text
-192.168.1.25
+NODE_ENV=production
+PORT=<platform supplied port>
+ALLOWED_ORIGINS=https://<frontend-host>
 ```
 
-Use the real value from your PC below as `<PC-IP>`.
+Build and run the existing server without changing the game architecture.
 
-Do not use `localhost` or `127.0.0.1` from the phones/table device.
+Requirements:
 
-## 2. Start the server
+- persistent Node process,
+- WebSocket upgrades supported,
+- one backend instance only for Phase 1,
+- `/games`, `/rooms`, and `/socket.io/` available at the backend origin with no extra URL prefix,
+- do not add persistence, accounts, horizontal scaling, or a boardgame.io upgrade.
 
-In one PowerShell window:
+## Frontend requirements
 
-```powershell
-cd C:\Users\mdelg\Documents\card-genie
-npm run dev:server
-```
-
-The game server uses port 8000.
-
-## 3. Start the client exposed to the LAN
-
-In a second PowerShell window:
-
-```powershell
-cd C:\Users\mdelg\Documents\card-genie
-npm --prefix client run dev:host
-```
-
-Vite should expose the client on port 5173.
-
-The client derives the game-server URL from the browser hostname, so a phone opening:
+Build with:
 
 ```text
-http://<PC-IP>:5173/
+VITE_SERVER_URL=https://<backend-host>
 ```
 
-should talk to:
+Publish `client/dist` through HTTPS.
+
+The existing links must continue to work:
 
 ```text
-http://<PC-IP>:8000
+/?room=<matchID>
+/?table=<matchID>
 ```
 
-without a separate configuration change.
+## Hosted acceptance flow
 
-## 4. Confirm basic LAN reachability
+Use at least three browser contexts, preferably on separate devices or networks:
 
-From Phone 1, while on the same Wi-Fi, open:
+1. Host/player opens the hosted frontend and creates a 2-player room.
+2. Guest/player joins through the hosted join URL.
+3. Public table opens through the hosted `?table=<matchID>` URL.
+4. Confirm the table consumes no player seat.
+5. Host starts after both real player seats are filled.
+6. First legal draw is visible face-up only to the drawing player.
+7. Other player and public table see only public draw progress / a face-down card.
+8. Deck count and current turn synchronize in real time.
+9. Final draw reveals both cards and the same winner/tie everywhere.
+10. Only the authoritative final-draw/current player can replay.
+11. Replay clears old cards/winner, restores deck count to 52, and selects a valid new first player.
+12. The first draw of the next round is private again.
+13. Refresh/reconnect a spectator/table and confirm no private historical state appears.
 
-```text
-http://<PC-IP>:5173/
-```
+## Production checks
 
-Expected result: the Card Genie room screen loads.
+Also verify:
 
-If the page does not load:
-
-- confirm the phone and PC are on the same network,
-- confirm Vite was started with `dev:host`,
-- make sure the network is not a guest/client-isolated Wi-Fi,
-- allow Node.js through Windows Firewall on **Private networks** if Windows prompts,
-- verify the PC's IPv4 address has not changed.
-
-If the page loads but room creation/game synchronization fails, check whether Windows Firewall is blocking port 8000 / the Node server.
-
-## 5. Run the complete physical-device flow
-
-Use at least three physical browser contexts if available.
-
-### Device A — Host/player
-
-Open:
-
-```text
-http://<PC-IP>:5173/
-```
-
-Create a 2-player room.
-
-Confirm:
-
-- the creator occupies the host seat,
-- a room code is shown,
-- the normal player join link / QR is available,
-- an **Open public table** link is available.
-
-### Device B — Guest/player
-
-Join using the room QR/link or:
-
-```text
-http://<PC-IP>:5173/?room=<matchID>
-```
-
-Choose the remaining seat and join.
-
-Confirm the host now sees all player seats filled and can start.
-
-### Device C — Public table
-
-Open the public-table link or:
-
-```text
-http://<PC-IP>:5173/?table=<matchID>
-```
-
-Confirm:
-
-- no player name/seat is requested,
-- the table does not occupy a player seat,
-- no player controls appear,
-- the waiting room/public state is visible before start.
-
-## 6. Start and verify privacy/synchronization
-
-Start the game from the host device.
-
-For the first legal player draw, verify all of the following before the second player draws:
-
-- the drawing player sees their own card face up,
-- the other player does **not** see that rank/suit,
-- the public table does **not** see that rank/suit,
-- the public table shows only that the player has drawn / a face-down card,
-- deck count and turn state update on all devices.
-
-Then complete the second draw.
-
-Confirm:
-
-- all devices transition to round complete,
-- both cards become public only after completion,
-- the same winner/tie appears everywhere,
-- the public table remains view-only.
-
-## 7. Verify replay on physical devices
-
-The final-draw/current player should be the only player allowed to start the next round.
-
-Confirm:
-
-- that player sees an actionable **Play again** button,
-- the other player sees a waiting message instead of an actionable replay control,
-- the table has no replay control,
-- replay clears the old cards and winner,
-- deck count returns to 52,
-- the next round has a valid first player,
-- the first legal draw of the new round again remains private to its owner and face-down/public on the table.
-
-## 8. Basic mobile/table usability check
-
-On the phones and table device, also note:
-
-- any horizontal scrolling,
-- clipped cards/buttons/text,
-- controls too small to tap,
-- unreadable text,
-- table layout that looks poor on a tablet/TV-sized screen,
-- reconnect or synchronization delays that are noticeable in normal use.
-
-Do not redesign anything pre-emptively. Record concrete problems only.
+- frontend is HTTPS,
+- backend is HTTPS,
+- SocketIO connects successfully through the hosted proxy,
+- WebSocket/polling requests from the allowed frontend origin succeed,
+- requests from the deployed frontend are not blocked by CORS,
+- `/games` returns HTTP 200 from the backend,
+- no mixed-content errors appear in browser developer tools.
 
 ## Pass criteria
 
-LAN validation passes when all of these are true on physical devices:
+Hosted validation passes only when the complete create/join/start/private draw/reveal/replay/next-round flow succeeds against the real deployment.
 
-1. At least two player devices can reach the PC-hosted client.
-2. A separate physical device can open the standalone public table.
-3. Room creation/join/start work over LAN.
-4. The public table consumes no seat.
-5. Private first-draw card data is visible only to its owner.
-6. Public draw progress synchronizes in real time.
-7. Reveal/winner/tie synchronize correctly.
-8. Replay authorization is correct.
-9. Replay starts a clean new round.
-10. The next-round first draw still preserves privacy and synchronization.
-11. The UI is usable on the tested phones/table device.
+Automated tests, local production mode, and a successful `/games` health check are necessary but do not substitute for this end-to-end hosted run.
 
-## If something fails
+## After success
 
-Do **not** broadly refactor the project.
+Update `ledger.md` to record:
 
-Record:
+- physical LAN validation as verified,
+- compiled non-default production startup as verified,
+- hosted end-to-end validation as verified,
+- the actual hosting provider / service URLs used for the test,
+- any non-blocking limitations discovered.
 
-- which device/browser failed,
-- the exact URL used,
-- what step failed,
-- any browser/server console error,
-- whether the client page loaded,
-- whether port 5173 worked but port 8000 appeared blocked,
-- whether the issue reproduces on the PC browser itself.
+Then mark Phase 1 complete and set the next task to **Phase 2A — `GameDefinition v0`**.
 
-Then use Astra for the smallest fix targeted at that concrete failure.
-
-## After a successful test
-
-Update `ledger.md` to mark physical LAN validation as verified and record the actual devices/browsers used.
-
-Do not begin Phase 2 yet. The remaining Phase 1 acceptance item after LAN validation is the equivalent hosted end-to-end test.
+Do not work on the low-priority TV layout issue or begin the user-facing Game Creator before `GameDefinition v0` and the generic runtime are proven.
