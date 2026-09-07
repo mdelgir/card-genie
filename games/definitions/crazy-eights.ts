@@ -28,7 +28,7 @@ export const crazyEightsDefinition = {
     type: "matching-discard",
     legal: { type: "match-suit-or-rank", wildRank: "8" },
     wild: { type: "choose-suit", rank: "8" },
-    fallback: { type: "draw-if-no-legal-play", count: 1, after: "end-turn" },
+    fallback: { type: "draw-if-no-legal-play", count: 1, after: "end-turn", emptyDeck: "tie" },
   },
   roundEnd: { type: "empty-hand" },
   winner: { type: "first-empty-hand" },
