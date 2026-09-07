@@ -1,115 +1,113 @@
 # Card Genie progress ledger
 
-This is the current progress record. [goals.md](goals.md) defines the target outcomes; [LOG.md](LOG.md) preserves the earlier development history. Add dated entries after meaningful work, recording changes, validation, limitations, and the next task. Do not mark untested behavior complete.
+This is the current progress record. [goals.md](goals.md) defines the target outcomes; [LOG.md](LOG.md) preserves earlier development history. Add dated entries after meaningful work, recording changes, validation, limitations, and the next task. Do not mark untested behavior complete.
 
 ## Current status
 
 | Area | Status | Evidence / remaining work |
 | --- | --- | --- |
-| Room creation and joining | Verified locally | Creator automatically occupies host seat; joiners select an available seat; names, credentials, room codes, and QR sharing retained. |
-| Waiting room and start | Verified | Host-only start checks occupied seats on the server; no shuffle/draw before start; synchronized transition tested over SocketIO and in two browser tabs. |
-| Deck and demo rules | Implemented | Standard 52-card deck, shuffle, randomized turn order, explicit one-card draw per player, highest-card winner/tie. The explicit draw is intentionally the Phase 1 demo's deal mechanic; no separate automatic initial deal is required. |
-| Player and spectator privacy | Verified in automated tests | Private deck excluded; own hand only before reveal; public draw status; initial-sync guard removes historical secrets and random state. |
-| Synchronization | Verified locally | Authenticated SocketIO players, spectator/late join, draw, reveal, winner, and replay covered. |
-| Independent table entry | Verified locally | `/?table=<matchID>` opens a credential-less public table without consuming a seat. Player pages mount only their own board. |
-| Round completion and replay | Verified locally | Explicit waiting/playing/complete status; final-draw/current player alone may replay. Fresh deck, cleared private state, and refreshed full turn order verified. |
-| Card graphics | Verified visually | All 52 SVG faces, patterned backs, card slots, deck stack, and winner emphasis; desktop/mobile browser checks and private-card labels verified. |
-| Builds | Verified | Both production builds pass; compiled server responds to /games; built client preview returns HTTP 200. |
-| Device / hosted validation | Partial | Local multi-tab/browser validation is complete. Physical phones, TV/tablet layout, LAN reachability, and hosted end-to-end use remain unverified. |
-
-## 2025-12-29 — Existing foundation
-
-Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, boardgame.io server, React client, Lobby flow, turn-based draws, replay, and basic tests. The inspected checkout also includes host-aware server URLs and QR sharing.
-
-## 2026-09-06 — Repository assessment and privacy repair
-
-- Inspected the Windows checkout for `mdelgir/card-genie`, initially at commit `d28b883`. WSL was inaccessible. `AGENTS.md` and `PROJECT_CONTEXT.md` were absent.
-- Initial workflow: install succeeded; server/client builds failed; two existing tests passed. Local network probes demonstrated draw/winner/replay synchronization and exposed private-state leaks.
-- Fixed player/spectator filtering, introduced public deck counts and draw-status fields, and made draw/replay server-only moves.
-- Added `PrivateStateSocketIO` to guard boardgame.io 0.50.2's unfiltered `initialState` sync field, including random-plugin secrets. Normal current-state filtering still uses boardgame.io playerView.
-- Nine tests pass, including actual SocketIO connections and a late spectator join. Existing lockfile modifications were preserved.
-
-## 2026-09-06 — Build repair and project records
-
-- Expanded the server compilation root to include shared game logic, excluded tests from production output, and enabled noEmitOnError.
-- Aligned the production start command with `server/dist/server/src/index.js`.
-- Added QRCode declarations and Vite environment types; used boardgame.io's BoardProps and handled nullable winners explicitly.
-- Moved generated Vite configuration output under client/dist to prevent a generated JavaScript config from shadowing the source TypeScript config.
-- Added this ledger and goals.md; linked both from README and preserved LOG.md history.
-- Validation in the original checkout: npm install (workspace cache), npm run build:server, npm run build:client, and npm test all pass; nine tests pass. Compiled server startup and /games response pass; built client preview returns HTTP 200.
-- Vite uses its module-runner config loader and an ESM-compatible alias path to avoid config bundling blocked by this Windows sandbox. TypeScript build caches live under node_modules/.cache.
-- Development-mode dependency optimization still encounters an esbuild ancestor-directory access denial in this Codex sandbox. Production builds and preview pass; dev-mode browser use outside this sandbox remains unverified.
-- Installation reports 23 dependency vulnerabilities (4 low, 6 moderate, 13 high). No automatic dependency audit upgrades were applied.
-
-## 2026-09-06 — Authoritative waiting room and start
-
-- Room creation now reserves seat 0 for its creator and returns the creator's opaque credentials. Guests choose available seats; the waiting room refreshes public Lobby metadata once per second.
-- The game starts in a waiting phase with no deck. Only an authenticated creator can POST /rooms/:id/start once every seat is occupied. Start/seat mutations use the same per-match queue as gameplay.
-- The server dispatches the accepted start through boardgame.io Master, preserving existing filtering and synchronization. The game shuffles the deck and turn order at this transition; the one-card draw demo is unchanged.
-- Network clients may submit only draw and replay moves. Direct start, phase/event, undo, and reset packets are blocked; game checks reject premature draws and repeated starts.
-- Creator credentials cannot be acquired by reclaiming a departed host's seat. There is no host transfer or credential recovery yet; if the creator leaves or loses credentials, create a new room.
-- Validation: both builds pass, eleven tests pass, including missing/guest credentials, empty/vacated seats, forged start/phase changes, simultaneous starts, host-seat reclamation, privacy, winner, and replay.
-- Browser verification: create, disabled premature start, guest seat selection/join, enabled host start, synchronized turn progression, private first draw, and shared winner verified using two tabs with public table views.
-- The earlier Vite development optimizer access failure is resolved with the session's unrestricted filesystem permissions. Development mode starts and the browser renders the join form successfully.
-- Existing replay-permission/turn-order limitations remain deferred to the next lifecycle task.
-
-## 2026-09-06 — Graphical cards and felt table
-
-- Replaced text cards with a reusable SVG PlayingCard component: ivory faces, accurate number-card pip layouts, ornamental aces, mirrored J/Q/K court art, and navy/gold patterned backs. No external artwork or new dependencies.
-- Extracted GameBoard from App and centralized the server URL. Card rendering stays independent of transport and game rules; face/back/empty variants and stable player slots support future animation.
-- Added a green felt surface, deck stack, responsive hand/public-card layouts, gold winner emphasis, keyboard focus styles, and reduced-motion support.
-- Public card slots remain face down until the authoritative reveal; the private hand alone displays the player's card beforehand. Face-down accessibility labels contain no rank or suit.
-- Verified all 52 card designs in a temporary visual proof, a two-browser draw/reveal flow, winner styling, and a 390px mobile layout with no horizontal overflow. Existing eleven tests pass and the client production build passes.
-- Game/server rules and the known replay/session limitations are unchanged. Elaborate dealing/flipping animations remain deferred.
+| Room creation and joining | Verified | Creator automatically occupies host seat; joiners select an available seat; names, credentials, room codes, and QR sharing work locally, over LAN, and in the hosted deployment. |
+| Waiting room and start | Verified | Host-only start checks occupied seats on the server; no shuffle/draw before start; synchronized transition tested over SocketIO and in real multiplayer runs. |
+| Deck and demo rules | Verified | Standard 52-card deck, shuffle, randomized turn order, explicit one-card draw per player, highest-card winner/tie. The explicit draw is intentionally the Phase 1 demo's deal mechanic. |
+| Player and spectator privacy | Verified | Private deck excluded; own hand only before reveal; public draw status; initial-sync guard removes historical secrets and random state. Automated SocketIO coverage protects reconnect/spectator paths. |
+| Synchronization | Verified | Authenticated SocketIO players, spectator/late join, draw, reveal, winner, and replay covered by automated tests and browser/device validation. |
+| Independent table entry | Verified | `/?table=<matchID>` opens a credential-less public table without consuming a seat. Verified in browser and on a TV over LAN. |
+| Round completion and replay | Verified | Explicit waiting/playing/complete status; final-draw/current player alone may replay. Fresh deck, cleared private state, and refreshed full turn order verified. |
+| Card graphics | Verified visually | All 52 SVG faces, patterned backs, card slots, deck stack, winner emphasis, desktop/mobile checks, and private-card labels verified. |
+| Builds / CI | Verified | Server/client production builds and GitHub CI pass; compiled server responds to `/games`; production server starts on a non-default `PORT`. |
+| Physical LAN validation | Verified | Real phones and a TV/public-table browser reached the development host over LAN; full create/join/start/draw/reveal/replay flow was exercised. |
+| Hosted validation | Verified | Railway HTTPS frontend/backend deployed successfully. A complete two-player hosted game was played with a PC and phone participating. Hosted transport, room creation/join, authoritative turns, draw/reveal, and game completion worked end-to-end. |
+| Phase 1 | **Complete** | The Phase 1 vertical slice is complete based on combined automated, local browser, physical LAN/table, production-runtime, and Railway-hosted validation. |
 
 ## Next priorities
 
-1. Manually verify the complete flow on physical LAN devices: development PC + at least two player phones + a separate public-table device.
-2. Validate the equivalent complete flow against a hosted server/client configuration.
-3. After both validations pass and the ledger is updated, declare Phase 1 complete and begin Phase 2A (`GameDefinition v0`).
+1. **Phase 2A — `GameDefinition v0`**: add a small versioned, data-only TypeScript rule schema and validator.
+2. **Phase 2B — generic authoritative runtime**: interpret validated definitions on the server without trusting client-side rule decisions.
+3. Migrate Highest Card to the generic runtime, then prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
 
-## Known limitations
+## Known limitations / backlog
 
-- Room credentials currently live in React memory; a browser refresh does not restore the player session.
-- Development server CORS is permissive by default; production requires an explicit allowed-origin list. Real hosted validation remains pending (see HOSTING.md).
-- The SocketIO guard is specific to the pinned boardgame.io version. Keep the initial-snapshot regression test when changing dependencies. The library's unguarded Local transport is for tests here, not a privacy-safe deployment substitute.
-- No Phase 1 user-defined rule engine or elaborate animations are planned.
+- Room credentials currently live in React memory; refreshing a player page does not restore the authenticated player session.
+- There is no host transfer or credential recovery yet; if the creator loses credentials or leaves, create a new room.
+- Hosted room state is in memory and the Phase 1 deployment must remain a single backend instance; redeploy/restart loses active rooms. Persistence and horizontal scaling are later work.
+- The SocketIO privacy guard is specific to pinned boardgame.io 0.50.2. Keep the initial-snapshot regression test when changing dependencies; do not casually upgrade boardgame.io.
+- The TV/public-table viewport needs layout polish on some TV browsers; tracked as low-priority GitHub issue #1 and not a Phase 1 blocker.
+- The earlier guest-seat selection/retry UX issue remains non-blocking backlog work.
+- Installation previously reported dependency vulnerabilities; no automatic audit upgrades were applied because dependency changes could affect the pinned multiplayer stack.
 
-## 2026-09-06 — Release checkpoint
+## 2025-12-29 — Existing foundation
 
-- Integrated the remote AGENTS.md and PROJECT_CONTEXT.md additions (through 57978fc) before committing the accumulated implementation work.
-- Revalidated both production builds and all eleven tests. This checkpoint includes privacy repairs, build fixes, project records, the authoritative waiting/start flow, and graphical cards.
+Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, boardgame.io server, React client, Lobby flow, turn-based draws, replay, and basic tests. The inspected checkout also included host-aware server URLs and QR sharing.
+
+## 2026-09-06 — Repository assessment and privacy repair
+
+- Inspected the active Windows checkout and repaired private-state leaks.
+- Added server-side player/spectator filtering, public deck counts/draw-status fields, and server-only draw/replay moves.
+- Added `PrivateStateSocketIO` to guard boardgame.io 0.50.2's unfiltered `initialState` sync field, including random-plugin secrets.
+- Added real SocketIO privacy coverage, including a late spectator join.
+
+## 2026-09-06 — Build repair and project records
+
+- Repaired server compilation boundaries and production start path.
+- Fixed client typing/configuration issues and Vite config shadowing.
+- Added `goals.md`, this ledger, AGENTS/project handoff records, and repeatable build/test commands.
+- Both production builds, compiled server startup, `/games`, and built-client preview were verified.
+
+## 2026-09-06 — Authoritative waiting room and start
+
+- Room creation reserves seat 0 for the creator and returns opaque credentials; guests choose available seats.
+- The game begins in a waiting lifecycle with no deck. Only the authenticated creator can start after all seats are occupied.
+- Start, seat mutation, and gameplay remain authoritative and synchronized through boardgame.io.
+- Direct lifecycle/reset/undo bypasses are blocked; premature draw/start attempts are rejected.
+- Browser and automated tests verified create/join/start/private draw/winner behavior.
+
+## 2026-09-06 — Graphical cards and felt table
+
+- Added reusable SVG card faces/backs for the full standard deck, green felt presentation, deck stack, responsive private/public layouts, winner emphasis, focus styles, and reduced-motion support.
+- Public cards remain face down until authoritative reveal; private hands alone display their player's card beforehand.
+- Desktop/mobile visual checks and the existing game/privacy tests passed.
 
 ## 2026-09-06 — Standalone public table
 
-- Completed the standalone-table brief in NEXT_TASK.md. Open `/?table=<matchID>` directly or use “Open public table” beside a joined player's existing join link and QR code.
-- Table entry mounts only a spectator GameClient, with no player ID or credentials and no player form. Public Lobby metadata validates the room; empty/invalid links show an error with a return link.
-- Removed the embedded second board from player pages and made the standalone table full-width. Disabled the boardgame.io debug panel so public displays expose no debug player/move controls.
-- Preserved the game, server, and transport privacy implementations. Extended the real SocketIO regression test to assert that an additional table does not alter player-seat metadata; existing coverage verifies private hands, deck, historical snapshots, random state, reveal, and replay.
-- Validation: both production builds and all eleven tests pass. Three separate browser tabs verified host creation, guest seat selection/join, table waiting with an empty seat, host start after both player seats filled, live face-down draw progress, public reveal/winner, and one board per player. Empty and nonexistent table IDs show useful errors; full-width felt presentation inspected visually.
-- Physical LAN devices and hosted use remain unverified. Round/replay cleanup and all later roadmap work remain pending; this task does not change them. The previously reported guest-seat selection/retry UX issue is outside this brief and remains unresolved.
+- Added `/?table=<matchID>` as an independent credential-less spectator/public-table entry point.
+- Table entry consumes no player seat and receives only public state through the existing privacy path.
+- Removed the embedded spectator board from joined-player pages and made standalone table mode full-width.
+- Three browser contexts verified waiting/start/live draw progress/reveal, and automated coverage asserts that table entry does not alter seat metadata.
 
 ## 2026-09-06 — Round completion and replay cleanup
 
-- Completed the round/replay brief in NEXT_TASK.md. Added public authoritative `roundStatus` (`waiting`, `playing`, `complete`) to setup, start, final draw, replay, and the playerView allowlist. Retained `revealed` for card visibility and `started` for existing room-start checks; a completed round is not a terminal boardgame.io gameover.
-- Replay policy: only the authoritative current player at completion (the final-draw player) can replay. Game checks and boardgame.io authorization enforce this; that player's button is disabled when disconnected. Other players see who must replay, and the public table has no player controls. Every board labels the completed round explicitly.
-- Replay now re-enters the playing phase through boardgame.io, refreshing `ctx.playOrder`, its position, and current player from the newly shuffled `G.playOrder`. Previously endTurn selected a new first player but retained the old engine turn sequence. The final draw does not advance the turn.
-- Validation: both production builds and all 13 tests pass. Coverage includes deterministic winner/tie completion, rejected premature replay and post-completion draws, raw SocketIO unauthorized player/spectator replay attempts, a fresh unique 52-card server deck, cleared round state, and valid synchronized turn ownership. A seeded three-player test verifies changed full turn sequences over repeated rounds. Player/table current-state and reconnect privacy remain verified after a next-round draw, including empty deck payloads, filtered initial history, undo/redo, and random state.
-- Three browser tabs verified host/guest/table completion with the same winner, replay available only to the final-draw guest, a waiting message for the host, no table actions, cleared cards/winner and 52-card count after replay, a changed first player, and the next legal private draw synchronized as a face-down card on the table.
-- Existing sessions from before this state-schema change are not migrated; restart the server and create fresh rooms when updating. If the replay-authorized player loses credentials or leaves, recovery/host transfer remains unavailable. Physical LAN/hosted checks and the existing join UX issue remain pending. No initial-deal redesign or later roadmap work was undertaken.
+- Added explicit public `roundStatus` (`waiting`, `playing`, `complete`).
+- Replay policy is authoritative: only the current/final-draw player may replay; spectators and other players cannot.
+- Replay refreshes the shuffled deck/private state and boardgame.io play order rather than retaining stale turn sequence state.
+- Builds passed and 13 tests covered completion, replay authorization, fresh deck/private state, synchronized turn ownership, reconnect privacy, and repeated seeded turn-order checks.
 
 ## 2026-09-06 — Phase 1 deal semantics decision
 
-- Highest Card will retain the explicit per-turn one-card draw. There is no separate automatic initial deal in the Phase 1 demo.
-- The draw itself is the demo's deal mechanic and intentionally exercises authoritative turn ownership, private-card delivery, public draw progress, real-time synchronization, and reveal/winner behavior.
-- This is a product/rule decision, not an implementation gap. No code change is required for Phase 1.
-- Future configurable games may choose automatic setup dealing as part of `GameDefinition`; this decision does not constrain Phase 2 rule design.
+- Highest Card intentionally retains an explicit one-card draw per player rather than an automatic initial deal.
+- The draw itself is the demo's deal mechanic and exercises turn ownership, private-card delivery, public draw progress, synchronization, and reveal.
+- Future configurable games may choose automatic setup dealing through `GameDefinition`.
 
 ## 2026-09-07 — Hosted configuration readiness
 
-- Pulled latest main before implementation. The user is performing physical LAN validation and reports that phone and TV browsers reach the app; the full physical-device flow is not marked complete here. NEXT_TASK.md remains the manual LAN brief. TV layout work and Phase 2 were not undertaken.
-- Added validated runtime PORT (default 8000) and exact comma-separated ALLOWED_ORIGINS. NODE_ENV=production requires a nonempty allowlist; development keeps permissive LAN access when no list is supplied. API requests carrying disallowed origins are rejected before room mutations. Origin-less health checks/non-browser clients remain supported and still require credentials for authorized actions.
-- Applied the same list to boardgame.io API CORS and explicit SocketIO `cors.origin` plus `allowRequest`, correcting the pinned library's ineffective `cors.origins` option and checking direct WebSocket handshakes. Preserved boardgame.io 0.50.2, room lifecycle, rule authorization, and PrivateStateSocketIO filtering.
-- All client connections already use the shared serverUrl: SocketIO, Lobby, room creation, and host start. Trimmed explicit VITE_SERVER_URL whitespace/trailing slashes and retained the automatic browser-hostname port-8000 LAN fallback. Added provider-neutral HOSTING.md covering build/runtime variables, HTTPS/WebSockets, existing start path, single-instance in-memory limits, and the real hosted acceptance flow.
-- Validation: npm run build:server, npm run build:client, and npm test pass (15 tests). New tests cover port/origin validation, production failure without origins, development LAN defaults, allowed API preflight/creation, rejected origins, unchanged creator authorization, polling CORS headers, allowed/denied polling and WebSocket connections, and filtered spectator sync. All 13 prior game/privacy/network tests remain passing. A separate client production build with an explicit HTTPS backend URL also passes.
-- The compiled non-default-port startup command (NODE_ENV=production, PORT=9123, ALLOWED_ORIGINS=http://localhost:4174, npm --prefix server start) was rejected by automatic approval review without a stated reason. That compiled runtime check remains unverified; automated tests successfully started the source server with production origin configuration on ephemeral ports. No real hosted deployment was performed, and hosted end-to-end acceptance is still pending.
+- Added validated runtime `PORT` and exact comma-separated `ALLOWED_ORIGINS`; production requires a nonempty allowlist while development remains LAN-friendly.
+- Applied origin policy to boardgame.io APIs, SocketIO CORS, and direct WebSocket handshakes without weakening room authorization or `PrivateStateSocketIO` filtering.
+- Centralized hosted client connections through `VITE_SERVER_URL` while retaining automatic local/LAN fallback.
+- Added provider-neutral `HOSTING.md` for the two-service HTTPS frontend + Node/boardgame.io backend shape.
+- Server/client builds and 15 tests passed, including production origin configuration, allowed/denied polling/WebSocket access, authorization, and spectator privacy.
+
+## 2026-09-07 — Phase 1 device and production validation
+
+- Physical LAN flow was exercised manually with real phones plus a TV/public-table browser. Create/join/start/draw/reveal/replay worked over the local network.
+- The compiled production server was manually started with `NODE_ENV=production`, `PORT=9123`, and an explicit `ALLOWED_ORIGINS`; `GET /games` returned HTTP 200 with `["simple-card-game"]`.
+- The TV browser exposed a non-blocking viewport/vertical-fit issue, recorded separately as GitHub issue #1.
+
+## 2026-09-07 — Railway hosted validation and Phase 1 completion
+
+- Deployed the project to Railway using separate HTTPS services:
+  - Frontend: `https://card-genie-web-production.up.railway.app`
+  - Backend: `https://card-genie-production.up.railway.app`
+- Added root Railway start scripts and fixed Vite Preview host validation (`preview.allowedHosts`) so Railway health checks and the public frontend domain succeed. The frontend fix landed in commit `8705b93`.
+- Railway reported successful backend and frontend deployments after the host-check fix.
+- The user loaded the hosted app on both PC and phone and completed a full two-player hosted game. This verifies the deployed frontend/backend connection, public HTTPS path, room creation/joining, SocketIO multiplayer synchronization, authoritative draw/turn flow, reveal, and game completion in the real hosted environment.
+- The standalone public table and replay/privacy paths were already verified over physical LAN, browser, and automated SocketIO tests; they were not separately claimed as re-run in this particular two-device Railway game.
+- With those combined checks, Phase 1 is considered complete. The next engineering task is Phase 2A: define and validate `GameDefinition v0` without yet building the Game Creator UI or generic runtime.
