@@ -1,26 +1,20 @@
-# Next Task — Execute War in Generic Runtime
+# Next Task — War boardgame.io adapter
 
-Extend the **generic runtime only** so `warDefinition` executes. Do not make War playable in the app yet.
+Add a **thin War adapter only**. Do not add game selection/UI or register War on the server yet.
 
-Read `AGENTS.md`, `ledger.md`, this file; inspect `runtime.ts`, `types.ts`, `validator.ts`, `definitions/war.ts`, and focused tests only.
+Read `AGENTS.md`, `ledger.md`, this file; inspect the runtime, `warDefinition`, and `simple-card-game.ts` only as needed.
 
 ## Do
 
-- Preserve Highest Card behavior/API and all existing tests.
-- `startRound` with `warDefinition` + 2 seats must shuffle, deal 26 each round-robin, keep pile identities server-only, and leave no undealt deck.
-- Extend generic state/view only as needed for piles, pot, public face-up contributions, battle result, and terminal winner/tie.
-- `{type:"reveal-top"}` resolves one whole battle atomically: reveal both top cards; higher rank collects the whole ordered pot; ties repeat 3 face-down + 1 face-up until resolved; face-down cards never become public; insufficient-card rules follow the definition; then `all-cards-owned` completes or `next-battle` progresses.
-- Keep action authorization deterministic through the existing current-player boundary. If `next-battle` current-player semantics are ambiguous, make the smallest generic schema/comment clarification and test it; no game-name branching.
-- Rejected actions must not mutate state.
-- Views are allowlisted: public pile/pot counts and face-up contributions only; never pile/deck/pot/face-down identities.
-- Keep injected randomness; no `Math.random()`.
+- Add a War boardgame.io `Game` that delegates setup/battles/views to the generic runtime.
+- Preserve runtime privacy: piles/pot/face-down cards never leave authoritative state; public snapshots expose only allowed counts, face-up contributions, battle result, lifecycle/winner.
+- Keep server-authoritative current-player action and replay/start boundaries; map runtime rejections to `INVALID_MOVE`.
+- Avoid duplicating War rules in the adapter.
+- Add focused adapter/runtime-equivalence and privacy tests.
+- Do not change Highest Card behavior.
 
-## Tests
-
-Cover 26/26 deal + privacy, ordinary battle/collection order, repeated tie, one-side insufficient, both-insufficient tie, terminal all-52 ownership, deterministic progression, rejection non-mutation, spectator/player privacy, and Highest Card regression.
-
-No boardgame.io War registration, UI/client, rooms, persistence, AI, Crazy Eights, dependency upgrades, or TV work.
+No client UI, room game selector, server registration, transport changes, Crazy Eights, persistence, AI, dependency upgrades, or TV work.
 
 Run `npm run build:server`, `npm run build:client`, `npm test`; update `ledger.md`, commit, stop.
 
-Next: wire War into the playable app with a thin adapter/UI.
+Next: register both games and add a minimal room/game selector + War board UI.
