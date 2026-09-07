@@ -152,11 +152,12 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     choice(legal.wildRank, "handPlay.legal.wildRank", ["8"]);
     const wild = tagged(handPlay.wild, "handPlay.wild", ["choose-suit"], ["rank"]);
     choice(wild.rank, "handPlay.wild.rank", ["8"]);
-    const fallback = tagged(handPlay.fallback, "handPlay.fallback", ["draw-if-no-legal-play"], ["count", "after"]);
+    const fallback = tagged(handPlay.fallback, "handPlay.fallback", ["draw-if-no-legal-play"], ["count", "after", "emptyDeck"]);
     if (integer(fallback.count, "handPlay.fallback.count", 1, 52) && fallback.count !== 1) {
       error("handPlay.fallback.count", "unsupported-rule", "Matching-discard v0 draws exactly one fallback card.");
     }
     choice(fallback.after, "handPlay.fallback.after", ["end-turn"]);
+    choice(fallback.emptyDeck, "handPlay.fallback.emptyDeck", ["tie"]);
   }
 
   const visibility = object(root.visibility, "visibility", ["deck", "hand", "reveal",
