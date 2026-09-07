@@ -1,24 +1,26 @@
-# Next Task — War Schema Extension
+# Next Task — Execute War in Generic Runtime
 
-Extend `GameDefinition` just enough to describe a deterministic 2-player War game. **Schema + validator + definition only**; do not implement War runtime/UI yet.
+Extend the **generic runtime only** so `warDefinition` executes. Do not make War playable in the app yet.
 
-Read `AGENTS.md`, `ledger.md`, this file, then inspect only `games/engine/types.ts`, `validator.ts`, current definition/tests.
+Read `AGENTS.md`, `ledger.md`, this file; inspect `runtime.ts`, `types.ts`, `validator.ts`, `definitions/war.ts`, and focused tests only.
 
-## War semantics to represent
+## Do
 
-- standard 52-card deck; shuffle, deal 26 face-down cards to each player;
-- each battle reveals the top card from both players;
-- higher rank wins the whole battle pot and appends it to the winner's pile;
-- tie: each player contributes 3 face-down + 1 face-up, then compare again; repeated ties repeat this;
-- if a player cannot supply the required war cards, that player loses;
-- game ends when one player owns all cards.
+- Preserve Highest Card behavior/API and all existing tests.
+- `startRound` with `warDefinition` + 2 seats must shuffle, deal 26 each round-robin, keep pile identities server-only, and leave no undealt deck.
+- Extend generic state/view only as needed for piles, pot, public face-up contributions, battle result, and terminal winner/tie.
+- `{type:"reveal-top"}` resolves one whole battle atomically: reveal both top cards; higher rank collects the whole ordered pot; ties repeat 3 face-down + 1 face-up until resolved; face-down cards never become public; insufficient-card rules follow the definition; then `all-cards-owned` completes or `next-battle` progresses.
+- Keep action authorization deterministic through the existing current-player boundary. If `next-battle` current-player semantics are ambiguous, make the smallest generic schema/comment clarification and test it; no game-name branching.
+- Rejected actions must not mutate state.
+- Views are allowlisted: public pile/pot counts and face-up contributions only; never pile/deck/pot/face-down identities.
+- Keep injected randomness; no `Math.random()`.
 
-Add only generic reusable primitives needed for those semantics. Do **not** add `gameType: "war"`, callbacks, expressions, or executable hooks. Preserve Highest Card compatibility and validation.
+## Tests
 
-Add `games/definitions/war.ts` plus focused validator/JSON-round-trip tests. Reject contradictory/unsupported War-shaped definitions clearly.
+Cover 26/26 deal + privacy, ordinary battle/collection order, repeated tie, one-side insufficient, both-insufficient tie, terminal all-52 ownership, deterministic progression, rejection non-mutation, spectator/player privacy, and Highest Card regression.
 
-Do not change runtime, live games, client, rooms, transport, boardgame.io, or other backlog items.
+No boardgame.io War registration, UI/client, rooms, persistence, AI, Crazy Eights, dependency upgrades, or TV work.
 
 Run `npm run build:server`, `npm run build:client`, `npm test`; update `ledger.md`, commit, stop.
 
-Next task: extend the generic runtime to execute this War definition.
+Next: wire War into the playable app with a thin adapter/UI.
