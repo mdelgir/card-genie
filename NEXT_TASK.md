@@ -1,20 +1,9 @@
-# Next Task — War boardgame.io adapter
+# Next Task — Crazy Eights schema
 
-Add a **thin War adapter only**. Do not add game selection/UI or register War on the server yet.
+Extend the data-only definition/validator just enough for a deterministic Crazy Eights variant. No runtime/UI yet.
 
-Read `AGENTS.md`, `ledger.md`, this file; inspect the runtime, `warDefinition`, and `simple-card-game.ts` only as needed.
+Use generic primitives only. Variant: 2–4 players, 5 cards each, one public discard starter; on turn play one card matching active suit or rank, any 8 is wild and chooses the active suit; draw exactly one only when no legal play, then end turn; first empty hand wins. Owner sees own hand; everyone sees hand counts, discard top, and active suit.
 
-## Do
+Preserve Highest Card + War definitions/runtime. Add `definitions/crazy-eights.ts` and focused validation/JSON-round-trip tests. No game-name branching, callbacks, expressions, dependencies, or unrelated work.
 
-- Add a War boardgame.io `Game` that delegates setup/battles/views to the generic runtime.
-- Preserve runtime privacy: piles/pot/face-down cards never leave authoritative state; public snapshots expose only allowed counts, face-up contributions, battle result, lifecycle/winner.
-- Keep server-authoritative current-player action and replay/start boundaries; map runtime rejections to `INVALID_MOVE`.
-- Avoid duplicating War rules in the adapter.
-- Add focused adapter/runtime-equivalence and privacy tests.
-- Do not change Highest Card behavior.
-
-No client UI, room game selector, server registration, transport changes, Crazy Eights, persistence, AI, dependency upgrades, or TV work.
-
-Run `npm run build:server`, `npm run build:client`, `npm test`; update `ledger.md`, commit, stop.
-
-Next: register both games and add a minimal room/game selector + War board UI.
+Run builds/tests, update ledger, commit, stop. Next: generic runtime support for this definition.
