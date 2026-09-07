@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Compatibility reference only; not wired into the live boardgame.io game. */
+/** Rules used by the live Highest Card adapter. */
 export const highestCardDefinition: GameDefinition = {
   schemaVersion: 1,
   id: "highest-card",

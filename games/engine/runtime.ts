@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit } from "../simple-card-game";
+import type { Card, Rank, Suit } from "./cards";
 import type { ValidationError } from "./types";
 import { validateGameDefinition } from "./validator";
 

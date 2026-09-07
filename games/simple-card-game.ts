@@ -1,33 +1,15 @@
 import { INVALID_MOVE, TurnOrder } from "boardgame.io/core";
 import type { Game } from "boardgame.io";
+import type { Card } from "./engine/cards";
+import { createGameRuntime, type RoundState, type RoundView, type Winner } from "./engine/runtime";
+import { highestCardDefinition } from "./definitions/highest-card";
 
-export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
-export type Rank =
-  | "2"
-  | "3"
-  | "4"
-  | "5"
-  | "6"
-  | "7"
-  | "8"
-  | "9"
-  | "10"
-  | "J"
-  | "Q"
-  | "K"
-  | "A";
-
-export interface Card {
-  suit: Suit;
-  rank: Rank;
-  value: number;
-}
+export type { Card, Rank, Suit } from "./engine/cards";
 
 export interface SimpleCardGameState {
   // Authoritative deck; playerView always replaces it with an empty array.
   deck: Card[];
   started: boolean;
-  // Public, authoritative lifecycle; revealed controls card visibility only.
   roundStatus: "waiting" | "playing" | "complete";
   deckCount: number;
   hasDrawn: Record<string, boolean>;
@@ -37,78 +19,55 @@ export interface SimpleCardGameState {
   playOrder: string[];
 }
 
-const suits: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
-const ranks: Rank[] = [
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "10",
-  "J",
-  "Q",
-  "K",
-  "A",
-];
+const initialized = createGameRuntime(highestCardDefinition);
+if (!initialized.ok) {
+  throw new Error(`Invalid built-in Highest Card definition: ${JSON.stringify(initialized.errors)}`);
+}
+const runtime = initialized.runtime;
+const copyCard = (card: Card): Card => ({ suit: card.suit, rank: card.rank, value: card.value });
+const wireWinner = (winner: Winner): SimpleCardGameState["winner"] =>
+  winner === null ? null : winner.type === "tie" ? "tie" : winner.playerID;
 
-const createDeck = (): Card[] => {
-  const deck: Card[] = [];
-  for (const suit of suits) {
-    ranks.forEach((rank, index) => {
-      deck.push({ suit, rank, value: index + 2 });
-    });
-  }
-  return deck;
-};
+// Explicit copies detach boardgame.io Immer drafts before the pure runtime clones state.
+const toRound = (G: SimpleCardGameState, currentPlayer = G.playOrder[0]): RoundState => ({
+  deck: G.deck.map(copyCard),
+  hands: Object.fromEntries(Object.entries(G.hands).map(([id, card]) => [id, card ? [copyCard(card)] : []])),
+  playOrder: [...G.playOrder],
+  currentPlayer,
+  hasActed: { ...G.hasDrawn },
+  // Waiting belongs to the room adapter; its empty state still uses runtime visibility.
+  roundStatus: G.roundStatus === "waiting" ? "playing" : G.roundStatus,
+  revealed: G.revealed,
+  winner: G.winner === null ? null : G.winner === "tie" ? { type: "tie" } : { type: "player", playerID: G.winner },
+});
 
-const computeWinner = (hands: Record<string, Card | null>): string | "tie" => {
-  let bestValue = -1;
-  let bestPlayer: string | null = null;
-  let isTie = false;
-
-  Object.entries(hands).forEach(([playerID, card]) => {
-    if (!card) return;
-    if (card.value > bestValue) {
-      bestValue = card.value;
-      bestPlayer = playerID;
-      isTie = false;
-    } else if (card.value === bestValue) {
-      isTie = true;
-    }
+const wireFields = (round: RoundState | RoundView) => ({
+  hands: Object.fromEntries(Object.entries(round.hands).map(([id, cards]) => [id, cards[0] ?? null])),
+  hasDrawn: round.hasActed,
+  playOrder: round.playOrder,
+  winner: wireWinner(round.winner),
+  revealed: round.revealed,
+});
+const acceptRound = (G: SimpleCardGameState, round: RoundState) => {
+  Object.assign(G, wireFields(round), {
+    deck: round.deck, deckCount: round.deck.length, started: true, roundStatus: round.roundStatus,
   });
-
-  if (isTie || bestPlayer === null) return "tie";
-  return bestPlayer;
 };
 
 export const SimpleCardGame: Game<SimpleCardGameState> = {
   name: "simple-card-game",
-  minPlayers: 2,
-  maxPlayers: 8,
+  minPlayers: highestCardDefinition.players.min,
+  maxPlayers: highestCardDefinition.players.max,
   events: { endGame: false, endPhase: false, endTurn: false, setPhase: false,
     endStage: false, setStage: false, pass: false, setActivePlayers: false },
   phases: { waiting: { start: true }, playing: { turn: { order: TurnOrder.CUSTOM_FROM("playOrder") } } },
   setup: ({ ctx }): SimpleCardGameState => {
-    const deck: Card[] = [];
-    const hands: Record<string, Card | null> = {};
-    for (let i = 0; i < ctx.numPlayers; i += 1) {
-      hands[String(i)] = null;
-    }
     const playOrder = Array.from({ length: ctx.numPlayers }, (_, index) => String(index));
-
     return {
-      deck,
-      started: false,
-      roundStatus: "waiting",
-      deckCount: deck.length,
-      hasDrawn: Object.fromEntries(Object.keys(hands).map((id) => [id, false])),
-      hands,
-      winner: null,
-      revealed: false,
-      playOrder,
+      deck: [], started: false, roundStatus: "waiting", deckCount: 0,
+      hasDrawn: Object.fromEntries(playOrder.map(id => [id, false])),
+      hands: Object.fromEntries(playOrder.map(id => [id, null])),
+      winner: null, revealed: false, playOrder,
     };
   },
   moves: {
@@ -117,37 +76,22 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
       undoable: false,
       move: ({ G, ctx, playerID, random, events }) => {
         if (G.started || ctx.phase !== "waiting" || playerID !== "0") return INVALID_MOVE;
-        G.deck = random.Shuffle(createDeck());
-        G.deckCount = G.deck.length;
-        G.playOrder = random.Shuffle(Object.keys(G.hands));
-        G.started = true;
-        G.roundStatus = "playing";
+        const result = runtime.startRound(Object.keys(G.hands), indices => random.Shuffle(indices));
+        if (!result.ok) return INVALID_MOVE;
+        acceptRound(G, result.state);
         events.setPhase("playing");
       },
     },
     drawCard: {
       client: false,
       move: ({ G, ctx, playerID, events }) => {
-        if (G.roundStatus !== "playing" || !playerID || playerID !== ctx.currentPlayer) return INVALID_MOVE;
-        if (G.hands[playerID]) return INVALID_MOVE;
-
-        const [card, ...rest] = G.deck;
-        if (!card) return INVALID_MOVE;
-
-        G.deck = rest;
-        G.deckCount = rest.length;
-        G.hasDrawn[playerID] = true;
-        G.hands[playerID] = card;
-
-        const allDrawn = Object.values(G.hands).every(Boolean);
-        if (allDrawn) {
-          G.roundStatus = "complete";
-          G.revealed = true;
-          G.winner = computeWinner(G.hands);
-        } else {
-          events.endTurn();
+        if (G.roundStatus !== "playing") return INVALID_MOVE;
+        const result = runtime.applyAction(toRound(G, ctx.currentPlayer), playerID, { type: "draw" });
+        if (!result.ok) return INVALID_MOVE;
+        acceptRound(G, result.state);
+        if (result.state.roundStatus === "playing") {
+          events.endTurn({ next: result.state.currentPlayer });
         }
-
         return G;
       },
     },
@@ -155,50 +99,21 @@ export const SimpleCardGame: Game<SimpleCardGameState> = {
       client: false,
       move: ({ G, ctx, playerID, random, events }) => {
         if (G.roundStatus !== "complete" || !playerID || playerID !== ctx.currentPlayer) return INVALID_MOVE;
-
-        const deck = random.Shuffle(createDeck());
-        const hands: Record<string, Card | null> = {};
-        for (let i = 0; i < ctx.numPlayers; i += 1) {
-          hands[String(i)] = null;
-        }
-
-        G.deck = deck;
-        G.deckCount = deck.length;
-        G.hasDrawn = Object.fromEntries(Object.keys(hands).map((id) => [id, false]));
-        G.hands = hands;
-        G.winner = null;
-        G.revealed = false;
-        G.roundStatus = "playing";
-        G.playOrder = random.Shuffle(
-          Array.from({ length: ctx.numPlayers }, (_, index) => String(index))
-        );
-
+        const seats = Array.from({ length: ctx.numPlayers }, (_, index) => String(index));
+        const result = runtime.startRound(seats, indices => random.Shuffle(indices));
+        if (!result.ok) return INVALID_MOVE;
+        acceptRound(G, result.state);
         // Re-enter the phase to refresh ctx.playOrder as well as its first player.
         events.setPhase("playing");
-
         return G;
       },
     },
   },
   playerView: ({ G, playerID }) => {
-    const maskedHands: Record<string, Card | null> = {};
-    Object.keys(G.hands).forEach((id) => {
-      maskedHands[id] = G.revealed || id === playerID ? G.hands[id] : null;
-    });
-
+    const visible = runtime.playerView(toRound(G), playerID);
     return {
-      // Allowlist public fields so future private zones cannot leak by default.
-      deck: [],
-      started: G.started,
-      roundStatus: G.roundStatus,
-      deckCount: G.deck.length,
-      hasDrawn: Object.fromEntries(
-        Object.entries(G.hands).map(([id, card]) => [id, Boolean(card)])
-      ),
-      hands: maskedHands,
-      winner: G.winner,
-      revealed: G.revealed,
-      playOrder: G.playOrder,
+      ...wireFields(visible),
+      deck: [], started: G.started, roundStatus: G.roundStatus, deckCount: visible.deckCount,
     };
   },
 };

@@ -4,6 +4,8 @@ import { Client } from "boardgame.io/client";
 import { Local } from "boardgame.io/multiplayer";
 import { INVALID_MOVE } from "boardgame.io/core";
 import { SimpleCardGame, type SimpleCardGameState } from "./simple-card-game";
+import { createGameRuntime, type RoundState } from "./engine/runtime";
+import { highestCardDefinition } from "./definitions/highest-card";
 
 const setupContext = {
   ctx: { numPlayers: 2, phase: "waiting" },
@@ -28,6 +30,82 @@ const draw = (G: SimpleCardGameState, playerID: string) =>
   move("drawCard")({ G, ctx: { currentPlayer: playerID }, playerID, events: { endTurn: () => {} } } as any);
 
 const viewers = ["0", "1", null, undefined, "unknown"];
+
+for (const numPlayers of [2, 3, 8]) {
+  for (const tie of [false, true]) {
+    test(`live adapter matches runtime for ${numPlayers} players, ${tie ? "tie" : "winner"}, and replay`, () => {
+      const initialized = createGameRuntime(highestCardDefinition);
+      assert.ok(initialized.ok);
+      const runtime = initialized.runtime;
+      const seats = Array.from({ length: numPlayers }, (_, index) => String(index));
+      // Ace first, optionally a second ace; reverse seats to exercise non-host starts.
+      const shuffle = (indices: number[]) => indices.length === 52
+        ? [...(tie ? [12, 25] : [12]), ...indices.filter(i => i !== 12 && (!tie || i !== 25))]
+        : [...indices].reverse();
+      let shuffleCalls = 0;
+      const G = SimpleCardGame.setup!({ ...setupContext, ctx: { numPlayers } });
+      const ctx = { numPlayers, phase: "waiting", currentPlayer: "0" };
+      const context = {
+        ...setupContext, G, ctx,
+        random: { Shuffle: (indices: number[]) => { shuffleCalls++; return shuffle(indices); } },
+        events: {
+          setPhase: (phase: string) => { ctx.phase = phase; ctx.currentPlayer = G.playOrder[0]; },
+          endTurn: ({ next }: { next: string }) => { ctx.currentPlayer = next; },
+        },
+      };
+      assert.equal(shuffleCalls, 0);
+      assert.equal(G.roundStatus, "waiting");
+      assert.equal(move("drawCard")({ ...context, playerID: "0" }), INVALID_MOVE);
+      assert.equal(move("startGame")({ ...context, playerID: "1" }), INVALID_MOVE);
+
+      const compare = (state: RoundState) => {
+        assert.deepEqual(G.deck, state.deck);
+        assert.equal(ctx.currentPlayer, state.currentPlayer);
+        assert.deepEqual(G.playOrder, state.playOrder);
+        assert.equal(ctx.phase, "playing");
+        assert.equal(G.started, true);
+        for (const playerID of [...seats, null, undefined, "unknown"]) {
+          const expected = runtime.playerView(state, playerID);
+          assert.deepEqual(view(G, playerID), {
+            deck: [], started: true, roundStatus: expected.roundStatus,
+            deckCount: expected.deckCount, hasDrawn: expected.hasActed,
+            hands: Object.fromEntries(Object.entries(expected.hands).map(([id, cards]) => [id, cards[0] ?? null])),
+            winner: expected.winner === null ? null : expected.winner.type === "tie" ? "tie" : expected.winner.playerID,
+            revealed: expected.revealed, playOrder: expected.playOrder,
+          });
+        }
+      };
+      for (let round = 0; round < 2; round++) {
+        const started = runtime.startRound(seats, shuffle);
+        assert.ok(started.ok);
+        let state = started.state;
+        const actor = round === 0 ? "0" : ctx.currentPlayer;
+        assert.notEqual(move(round === 0 ? "startGame" : "restartGame")({ ...context, playerID: actor }), INVALID_MOVE);
+        assert.equal(shuffleCalls, (round + 1) * 2);
+        compare(state);
+        const before = structuredClone(G);
+        for (const playerID of [null, "unknown", state.playOrder[1]]) {
+          assert.equal(move("drawCard")({ ...context, playerID }), INVALID_MOVE);
+          assert.deepEqual(G, before);
+        }
+        for (const playerID of state.playOrder) {
+          const result = runtime.applyAction(state, playerID, { type: "draw" });
+          assert.ok(result.ok);
+          state = result.state;
+          assert.notEqual(move("drawCard")({ ...context, playerID }), INVALID_MOVE);
+          compare(state);
+          assert.equal(move("drawCard")({ ...context, playerID }), INVALID_MOVE);
+        }
+        assert.equal(G.winner, tie ? "tie" : state.playOrder[0]);
+        const completed = structuredClone(G);
+        for (const playerID of [null, "unknown", state.playOrder[0]]) {
+          assert.equal(move("restartGame")({ ...context, playerID }), INVALID_MOVE);
+          assert.deepEqual(G, completed);
+        }
+      }
+    });
+  }
+}
 
 test("completion is deterministic for a tie and rejects further draws without changing state", () => {
   const G = setup();

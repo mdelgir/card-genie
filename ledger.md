@@ -18,13 +18,13 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | Physical LAN validation | Verified | Real phones and a TV/public-table browser reached the development host over LAN; full create/join/start/draw/reveal/replay flow was exercised. |
 | Hosted validation | Verified | Railway HTTPS frontend/backend deployed successfully. A complete two-player hosted game was played with a PC and phone participating. Hosted transport, room creation/join, authoritative turns, draw/reveal, and game completion worked end-to-end. |
 | Phase 1 | **Complete** | The Phase 1 vertical slice is complete based on combined automated, local browser, physical LAN/table, production-runtime, and Railway-hosted validation. |
-| Phase 2A definition model | **Complete** | Versioned data-only schema, structured validator, and Highest Card reference fixture pass focused tests and JSON round-trip validation; not connected to the live game. |
-| Phase 2B isolated runtime | **Complete** | Validated v0 definitions drive deterministic round setup/actions/outcomes and allowlisted views. Unit-tested; live-game adapter migration remains separate. |
+| Phase 2A definition model | **Complete** | Versioned data-only schema, structured validator, and Highest Card definition pass focused tests and JSON round-trip validation. |
+| Phase 2B isolated runtime | **Complete** | Validated v0 definitions drive deterministic round setup/actions/outcomes and allowlisted views. |
+| Phase 2C live runtime migration | **Complete** | Highest Card delegates setup/actions/visibility to the runtime; 33 tests, both builds, and local player/table browser checks pass. This migration has not been deployed to Railway. |
 
 ## Next priorities
 
-1. Migrate live Highest Card onto the runtime with a thin boardgame.io adapter.
-2. Prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
+1. Prove the abstraction with War, then Crazy Eights, before building the user-facing Game Creator.
 
 ## Known limitations / backlog
 
@@ -129,3 +129,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - `playerView` constructs fresh allowlisted snapshots: public deck count only, owner-only hands before completion, public hands/winner after reveal, no undealt identities or arbitrary server metadata. Views copy card fields and public collections rather than aliasing authoritative state. Repeating startRound creates clean replay state after the caller authorizes replay.
 - Added six runtime tests for definition/seat validation, deterministic shuffling and invalid permutations, action rejection/non-mutation, full turn progression/completion, highest/lowest/ace/tie outcomes, player/other/spectator views, view isolation, clean replay and definition-copy isolation.
 - Validation: both required production builds and all 27 tests pass, preserving the prior 21 schema/game/privacy/network/production tests. No DSL expansion, live-game migration, UI/session/transport changes, dependency upgrades, or TV work. Runtime callers must supply server-owned state/authenticated identities and authorize start/replay; integrating that contract through boardgame.io is the next task, not part of this isolated runtime delivery.
+
+## 2026-09-07 — Phase 2C: live Highest Card runtime migration
+
+- Moved Card/Rank/Suit to `games/engine/cards.ts`, removing the engine's dependency on the live game while retaining its type re-exports for existing consumers.
+- The live adapter initializes and validates `highestCardDefinition` once, failing fast on an invalid built-in definition. Start/replay call runtime.startRound with boardgame.io shuffle; draw calls runtime.applyAction and maps rejections to INVALID_MOVE. Removed duplicate deck construction and winner rules.
+- Explicit state conversion detaches Immer drafts for pure runtime actions and preserves the existing client/wire fields. Views delegate to runtime.playerView and retain an allowlist. Boardgame.io receives the runtime's next player and refreshes its full play order on start/replay; host start and final-player replay authorization remain intact. Room/UI/transport code and pinned boardgame.io 0.50.2 are unchanged.
+- Added six equivalence tests covering 2, 3, and 8 players, winner/tie outcomes, setup/shuffle, draw/turn progression, rejected moves without mutation, replay, and all player/unknown/spectator views. Existing seeded multiplayer replay, real SocketIO authorization, historical snapshot privacy, reconnect, and production-origin regressions still pass.
+- Validation: `npm run build:server`, `npm run build:client`, and `npm test` passed (33 tests). Started the compiled backend on port 8001 and the local Vite client on 5174. Two separate player tabs plus a public-table tab verified create/join/start, a first private draw, synchronized deck counts/turns, public reveal/winner, final-player-only replay controls, fresh 52-card replay with changed turn order, a new private draw, and a reopened spectator showing only face-down public progress. Test browsers and servers were stopped afterward.
+- Browser checks verify presentation; automated SocketIO tests verify private data is absent from transmitted snapshots/history. This migration was not deployed or retested on physical LAN devices; those checks remain for a later deployment. No next-game or roadmap work was begun. Next task: War to stress the abstraction.
