@@ -80,6 +80,6 @@ test("server registers War and preserves private piles over SocketIO", async () 
     }
   } finally {
     clients.forEach(client => client.stop());
-    await server.kill();
+    server.kill(running);
   }
 });
