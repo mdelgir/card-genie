@@ -1,35 +1,23 @@
-# Next Task — Phase 2B: Generic Authoritative Runtime
+# Next Task — Phase 2C: Migrate Highest Card to the Runtime
 
-Implement the generic server-side runtime for the **current v0 `GameDefinition` only**. Keep the live boardgame.io Highest Card game unchanged; migration is the next task.
+Make the live `simple-card-game` use the Phase 2B runtime while preserving current gameplay, UI/wire state, room flow, privacy, and replay behavior.
 
-Read `AGENTS.md`, `goals.md`, `ledger.md`, then inspect:
-- `games/engine/types.ts`
-- `games/engine/validator.ts`
-- `games/definitions/highest-card.ts`
-- `games/simple-card-game.ts`
+Read `AGENTS.md`, `ledger.md`, this file, then inspect only the relevant game/runtime/tests. Do not reread broader docs unless blocked.
 
-## Build
+## Do
 
-Under `games/engine/`, add the smallest runtime needed to:
-
-- validate a definition before use;
-- start a round from a definition, player IDs, and injected deterministic shuffle/randomness;
-- create authoritative state: deck, play order/current player, acted status, private hands, lifecycle, reveal, winner;
-- expose a **generic action API** for the v0 `draw` action;
-- reject invalid/out-of-turn/duplicate actions with a structured result and no state mutation;
-- drive `next-player`, `all-players-acted`, `compare-rank`, `highest-wins`, `lowest-wins`, and ties from the definition;
-- build new allowlisted player/spectator views: never expose deck identities; before reveal, only the owner sees their hand; after reveal, hands/winner are public;
-- start a fresh clean round after the caller authorizes replay.
-
-Prefer pure/deterministic functions. Do not call `Math.random()` inside rule execution.
-
-## Tests
-
-Cover: valid/invalid initialization, player-count limits, deterministic shuffle/order, legal draw, out-of-turn/duplicate rejection without mutation, turn advance, final-round completion, highest/lowest/tie results, owner/other/spectator privacy, and fresh-round reset. Preserve all existing tests.
+- First remove the engine's dependency on `games/simple-card-game.ts`: move `Card`/`Rank`/`Suit` to an engine-owned/shared card module, then have the live game import/re-export as needed.
+- Create the runtime from `highestCardDefinition` once at module startup; fail fast if that built-in definition is invalid.
+- `startGame` / `restartGame`: use `runtime.startRound(...)`, adapting boardgame.io `random.Shuffle` to the runtime shuffle interface.
+- `drawCard`: use `runtime.applyAction(...)`; map rejected actions to `INVALID_MOVE`.
+- `playerView`: derive visibility from `runtime.playerView(...)`, preserving the existing client-facing shape unless a tiny compatible change is unavoidable.
+- Keep boardgame.io phases/turn context synchronized with runtime `playOrder/currentPlayer`; keep existing host start and replay authorization semantics.
+- Remove duplicated Highest-Card rule logic (`createDeck`, winner calculation, etc.) from the live adapter.
+- Add focused regression/equivalence tests proving the live game now follows the runtime for setup, draw/turn, winner/tie, replay, and private/spectator views.
 
 ## Do not
 
-Do not migrate `simple-card-game.ts`, change client/rooms/transport/privacy, add War/Crazy Eights/Game Creator/persistence/AI, expand the DSL beyond a necessary ambiguity fix, upgrade boardgame.io, or work on the TV issue.
+No client/room/transport redesign, no War/Crazy Eights/Game Creator/persistence/AI, no DSL expansion unless migration exposes a real ambiguity, no boardgame.io upgrade, no TV issue.
 
 ## Finish
 
@@ -41,6 +29,4 @@ npm run build:client
 npm test
 ```
 
-Update `ledger.md`, commit the work, and stop. Phase 2B is done when the isolated runtime passes these tests and the live game remains unchanged.
-
-Next task: migrate live Highest Card onto the runtime with a thin boardgame.io adapter.
+Update `ledger.md`, commit, and stop. Next task after this is War / the next concrete game used to stress the abstraction.
