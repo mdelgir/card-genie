@@ -18,12 +18,12 @@ This is the current progress record. [goals.md](goals.md) defines the target out
 | Physical LAN validation | Verified | Real phones and a TV/public-table browser reached the development host over LAN; full create/join/start/draw/reveal/replay flow was exercised. |
 | Hosted validation | Verified | Railway HTTPS frontend/backend deployed successfully. A complete two-player hosted game was played with a PC and phone participating. Hosted transport, room creation/join, authoritative turns, draw/reveal, and game completion worked end-to-end. |
 | Phase 1 | **Complete** | The Phase 1 vertical slice is complete based on combined automated, local browser, physical LAN/table, production-runtime, and Railway-hosted validation. |
+| Phase 2A definition model | **Complete** | Versioned data-only schema, structured validator, and Highest Card reference fixture pass focused tests and JSON round-trip validation; not connected to the live game. |
 
 ## Next priorities
 
-1. **Phase 2A — `GameDefinition v0`**: add a small versioned, data-only TypeScript rule schema and validator.
-2. **Phase 2B — generic authoritative runtime**: interpret validated definitions on the server without trusting client-side rule decisions.
-3. Migrate Highest Card to the generic runtime, then prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
+1. **Phase 2B — generic authoritative runtime**: interpret validated definitions on the server without trusting client-side rule decisions. Not started in Phase 2A.
+2. Migrate Highest Card to the generic runtime, then prove the abstraction with War and Crazy Eights before building the user-facing Game Creator.
 
 ## Known limitations / backlog
 
@@ -111,3 +111,12 @@ Historical work recorded in LOG.md: scaffolded workspaces, reusable game logic, 
 - The user loaded the hosted app on both PC and phone and completed a full two-player hosted game. This verifies the deployed frontend/backend connection, public HTTPS path, room creation/joining, SocketIO multiplayer synchronization, authoritative draw/turn flow, reveal, and game completion in the real hosted environment.
 - The standalone public table and replay/privacy paths were already verified over physical LAN, browser, and automated SocketIO tests; they were not separately claimed as re-run in this particular two-device Railway game.
 - With those combined checks, Phase 1 is considered complete. The next engineering task is Phase 2A: define and validate `GameDefinition v0` without yet building the Game Creator UI or generic runtime.
+
+## 2026-09-07 — Phase 2A: GameDefinition v0
+
+- Added `games/engine/types.ts` with schemaVersion 1, identity/player range, per-round standard-deck shuffle, private hand/server-only deck visibility, round-end reveal, randomized turns, explicit draw, next-player progression, all-players-acted completion, and highest/lowest rank comparison with ace high and ties. Type comments define the supported semantics; start/replay permission remains a session concern.
+- Added `validateGameDefinition(unknown)` returning either a typed definition or ordered errors with path/code/message. It validates required fields, exact supported tags/values, 2–8 player ranges, integer counts, and the single-card requirement for rank comparison. Unknown fields are rejected rather than silently ignored. No rule expression/source-code fields or execution hooks exist.
+- Plain-data checks reject functions, accessors, non-finite numbers, undefined, bigint, symbols, non-plain objects, cycles, and excessive nesting/size. Accessors and toJSON hooks are not invoked. The v0 object schema has no arrays; future vocabulary can evolve when concrete games require it. Validation does not mutate input or execute rules.
+- Added `games/definitions/highest-card.ts` as a hand-written compatibility reference only. Added six validator tests covering the reference and JSON round-trip, unsupported versions, identity/required fields, malformed player/count fields, unknown primitives, contradictory multi-card comparison, lowest-wins support, executable/non-data rejection, and deterministic useful errors.
+- Verification: npm run build:server, npm run build:client, and npm test all pass (21 tests, including all 15 prior game/privacy/network/production-configuration tests). The existing test glob discovers the new nested tests without script changes. The reference survives JSON stringify/parse and validates successfully.
+- The live Highest Card game, client, room/session behavior, transport privacy, and boardgame.io version are unchanged. No generic runtime, Game Creator, additional games, persistence, AI rules, or TV layout changes were implemented. Phase 2B remains the next task.
