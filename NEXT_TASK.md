@@ -1,32 +1,24 @@
-# Next Task — Phase 2C: Migrate Highest Card to the Runtime
+# Next Task — War Schema Extension
 
-Make the live `simple-card-game` use the Phase 2B runtime while preserving current gameplay, UI/wire state, room flow, privacy, and replay behavior.
+Extend `GameDefinition` just enough to describe a deterministic 2-player War game. **Schema + validator + definition only**; do not implement War runtime/UI yet.
 
-Read `AGENTS.md`, `ledger.md`, this file, then inspect only the relevant game/runtime/tests. Do not reread broader docs unless blocked.
+Read `AGENTS.md`, `ledger.md`, this file, then inspect only `games/engine/types.ts`, `validator.ts`, current definition/tests.
 
-## Do
+## War semantics to represent
 
-- First remove the engine's dependency on `games/simple-card-game.ts`: move `Card`/`Rank`/`Suit` to an engine-owned/shared card module, then have the live game import/re-export as needed.
-- Create the runtime from `highestCardDefinition` once at module startup; fail fast if that built-in definition is invalid.
-- `startGame` / `restartGame`: use `runtime.startRound(...)`, adapting boardgame.io `random.Shuffle` to the runtime shuffle interface.
-- `drawCard`: use `runtime.applyAction(...)`; map rejected actions to `INVALID_MOVE`.
-- `playerView`: derive visibility from `runtime.playerView(...)`, preserving the existing client-facing shape unless a tiny compatible change is unavoidable.
-- Keep boardgame.io phases/turn context synchronized with runtime `playOrder/currentPlayer`; keep existing host start and replay authorization semantics.
-- Remove duplicated Highest-Card rule logic (`createDeck`, winner calculation, etc.) from the live adapter.
-- Add focused regression/equivalence tests proving the live game now follows the runtime for setup, draw/turn, winner/tie, replay, and private/spectator views.
+- standard 52-card deck; shuffle, deal 26 face-down cards to each player;
+- each battle reveals the top card from both players;
+- higher rank wins the whole battle pot and appends it to the winner's pile;
+- tie: each player contributes 3 face-down + 1 face-up, then compare again; repeated ties repeat this;
+- if a player cannot supply the required war cards, that player loses;
+- game ends when one player owns all cards.
 
-## Do not
+Add only generic reusable primitives needed for those semantics. Do **not** add `gameType: "war"`, callbacks, expressions, or executable hooks. Preserve Highest Card compatibility and validation.
 
-No client/room/transport redesign, no War/Crazy Eights/Game Creator/persistence/AI, no DSL expansion unless migration exposes a real ambiguity, no boardgame.io upgrade, no TV issue.
+Add `games/definitions/war.ts` plus focused validator/JSON-round-trip tests. Reject contradictory/unsupported War-shaped definitions clearly.
 
-## Finish
+Do not change runtime, live games, client, rooms, transport, boardgame.io, or other backlog items.
 
-Run:
+Run `npm run build:server`, `npm run build:client`, `npm test`; update `ledger.md`, commit, stop.
 
-```text
-npm run build:server
-npm run build:client
-npm test
-```
-
-Update `ledger.md`, commit, and stop. Next task after this is War / the next concrete game used to stress the abstraction.
+Next task: extend the generic runtime to execute this War definition.
