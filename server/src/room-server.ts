@@ -5,16 +5,19 @@ import { Master } from "boardgame.io/master";
 import { SimpleCardGame } from "../../games/simple-card-game";
 import { WarGame } from "../../games/war-game";
 import { CrazyEightsGame } from "../../games/crazy-eights-game";
+import { CustomCardGame } from "../../games/custom-card-game";
+import { validateGameDefinition } from "../../games/engine/validator";
 import { PrivateStateSocketIO } from "./private-state-transport";
 import { readServerConfig, isAllowedOrigin } from "./config";
 import type { ServerOptions } from "socket.io";
 
-const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame];
+const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame, CustomCardGame];
 const gamesByName = new Map(registeredGames.map(game => [game.name!, game]));
 const allowedMoves = new Map<string, Set<string>>([
   [SimpleCardGame.name!, new Set(["drawCard", "restartGame"])],
   [WarGame.name!, new Set(["revealBattle", "restartGame"])],
   [CrazyEightsGame.name!, new Set(["playCard", "drawCard", "restartGame"])],
+  [CustomCardGame.name!, new Set(["playCard", "drawCard", "revealBattle", "restartGame"])],
 ]);
 
 class RoomTransport extends PrivateStateSocketIO {
@@ -58,6 +61,18 @@ export function createCardGenieServer(config = readServerConfig()) {
     if (!isAllowedOrigin(ctx.headers.origin, origins)) ctx.throw(403, "Origin is not allowed.");
     const create = ctx.path.match(/^\/games\/([^/]+)\/create$/);
     if (ctx.method === "POST" && create && gamesByName.has(create[1])) {
+      if (create[1] === CustomCardGame.name) {
+        const body = (ctx.request as typeof ctx.request & {
+          body?: { numPlayers?: unknown; setupData?: { definition?: unknown; hostName?: unknown } };
+        }).body;
+        const validation = validateGameDefinition(body?.setupData?.definition);
+        if (!validation.ok) ctx.throw(400, `Invalid custom game definition: ${JSON.stringify(validation.errors)}`);
+        const numPlayers = body?.numPlayers;
+        if (!Number.isInteger(numPlayers) || (numPlayers as number) < validation.definition.players.min ||
+            (numPlayers as number) > validation.definition.players.max) {
+          ctx.throw(400, `Custom game requires ${validation.definition.players.min}–${validation.definition.players.max} players.`);
+        }
+      }
       await next();
       if (ctx.status !== 200) return;
       const { matchID } = ctx.body as { matchID: string };
