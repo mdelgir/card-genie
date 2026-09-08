@@ -66,11 +66,15 @@ export function createCardGenieServer(config = readServerConfig()) {
           body?: { numPlayers?: unknown; setupData?: { definition?: unknown; hostName?: unknown } };
         }).body;
         const validation = validateGameDefinition(body?.setupData?.definition);
-        if (!validation.ok) ctx.throw(400, `Invalid custom game definition: ${JSON.stringify(validation.errors)}`);
+        if (!validation.ok) {
+          ctx.throw(400, `Invalid custom game definition: ${JSON.stringify(validation.errors)}`);
+          return;
+        }
         const numPlayers = body?.numPlayers;
         if (!Number.isInteger(numPlayers) || (numPlayers as number) < validation.definition.players.min ||
             (numPlayers as number) > validation.definition.players.max) {
           ctx.throw(400, `Custom game requires ${validation.definition.players.min}–${validation.definition.players.max} players.`);
+          return;
         }
       }
       await next();
