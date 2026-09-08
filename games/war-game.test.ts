@@ -32,6 +32,7 @@ function expectedWire(state: RoundState, visible: RoundView) {
     piles: Object.fromEntries(state.playOrder.map(id => [id, []])),
     pot: [],
     contributions: visible.contributions,
+    tablePlacements: visible.tablePlacements,
     started: true,
     roundStatus: state.roundStatus,
     playOrder: visible.playOrder,
@@ -47,6 +48,7 @@ function compareAuthoritative(G: WarGameState, state: RoundState) {
   assert.deepEqual(G.piles, state.hands);
   assert.deepEqual(G.pot, state.battle?.pot ?? []);
   assert.deepEqual(G.contributions, state.battle?.contributions ?? []);
+  assert.deepEqual(G.tablePlacements, state.battle?.placements ?? []);
   assert.deepEqual(G.playOrder, state.playOrder);
   assert.deepEqual(G.pileCounts, Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])));
   assert.equal(G.potCount, state.battle?.pot.length ?? 0);
@@ -92,10 +94,11 @@ test("War adapter delegates setup and a battle to the generic runtime", () => {
   compareAuthoritative(G, state);
   assert.equal(ctx.currentPlayer, state.currentPlayer);
   assert.equal(G.contributions.length, 2);
+  assert.equal(G.tablePlacements.length, 2);
   assert.equal(G.potCount, 0);
 });
 
-test("War adapter views expose counts and face-up contributions but no pile, deck, or pot identities", () => {
+test("War adapter views expose table structure but no face-down card identities", () => {
   const started = runtime.startRound(["0", "1"], indices => [...indices]);
   assert.ok(started.ok);
   const resolved = runtime.applyAction(started.state, "0", { type: "reveal-top" });
@@ -108,6 +111,7 @@ test("War adapter views expose counts and face-up contributions but no pile, dec
     piles: state.hands,
     pot: state.battle?.pot ?? [],
     contributions: state.battle?.contributions ?? [],
+    tablePlacements: state.battle?.placements ?? [],
     started: true,
     roundStatus: state.roundStatus,
     playOrder: state.playOrder,
@@ -125,6 +129,7 @@ test("War adapter views expose counts and face-up contributions but no pile, dec
     assert.deepEqual(actual.pot, []);
     assert.deepEqual(actual.piles, { "0": [], "1": [] });
     assert.equal(actual.contributions.length, 2);
+    assert.ok(actual.tablePlacements.every(item => item.face === "up" ? item.card !== null : item.card === null));
   }
 });
 
@@ -153,5 +158,6 @@ test("War replay remains authorized by the terminal current player and starts a 
   assert.equal(G.potCount, 0);
   assert.deepEqual(G.pileCounts, { "0": 26, "1": 26 });
   assert.equal(G.contributions.length, 0);
+  assert.equal(G.tablePlacements.length, 0);
   assert.equal(G.deck.length, 0);
 });

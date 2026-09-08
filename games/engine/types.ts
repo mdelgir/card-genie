@@ -45,12 +45,24 @@ export type WinnerDefinition = {
   ties: "tie";
 } | { type: "all-cards-owner" } | { type: "first-empty-hand" };
 
+/** Public-table placement policy for cards contributed during a battle.
+ * Face-up/down comes from the contribution rule itself. Ownership is separate
+ * from attribution: a card may become neutral on the table while still recording
+ * which player placed it. Zone names are inert identifiers, not executable UI.
+ */
+export interface TablePlacementDefinition {
+  zone: string;
+  ownership: "placer" | "neutral";
+  attribution: "placer" | "none";
+}
+
 export interface BattleDefinition {
   type: "compare-contributions";
   comparison: "compare-rank";
   direction: "highest-wins";
   ace: "high";
   collect: { type: "append-pot"; order: "contribution-order" };
+  table: TablePlacementDefinition;
   ties: {
     type: "repeat-contribution";
     faceDown: number;

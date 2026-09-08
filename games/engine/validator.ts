@@ -123,12 +123,18 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     if (players.min !== 2 || players.max !== 2) {
       error("players", "contradictory-rule", "Paired contributions require exactly two players.");
     }
-    const battle = tagged(root.battle, "battle", ["compare-contributions"], ["comparison", "direction", "ace", "collect", "ties"]);
+    const battle = tagged(root.battle, "battle", ["compare-contributions"], ["comparison", "direction", "ace", "collect", "table", "ties"]);
     choice(battle.comparison, "battle.comparison", ["compare-rank"]);
     choice(battle.direction, "battle.direction", ["highest-wins"]);
     choice(battle.ace, "battle.ace", ["high"]);
     const collect = tagged(battle.collect, "battle.collect", ["append-pot"], ["order"]);
     choice(collect.order, "battle.collect.order", ["contribution-order"]);
+    const table = object(battle.table, "battle.table", ["zone", "ownership", "attribution"]);
+    if (typeof table.zone !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(table.zone) || table.zone.length > 32) {
+      error("battle.table.zone", "invalid-value", "Expected a lowercase kebab-case table-zone identifier of 1–32 characters.");
+    }
+    choice(table.ownership, "battle.table.ownership", ["placer", "neutral"]);
+    choice(table.attribution, "battle.table.attribution", ["placer", "none"]);
     const ties = tagged(battle.ties, "battle.ties", ["repeat-contribution"], ["faceDown", "faceUp", "insufficient", "bothInsufficient"]);
     if (integer(ties.faceDown, "battle.ties.faceDown", 0, 51) && ties.faceDown !== 3) {
       error("battle.ties.faceDown", "unsupported-rule", "Only three face-down tie contributions are currently specified.");

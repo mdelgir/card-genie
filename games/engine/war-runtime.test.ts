@@ -30,9 +30,15 @@ function privateViews(s: RoundState) {
     assert.equal(v.potCount, s.battle!.pot.length);
     assert.deepEqual(v.pileCounts, { a: s.hands.a.length, b: s.hands.b.length });
     assert.deepEqual(v.contributions, s.battle!.contributions);
-    assert.deepEqual(Object.keys(v).sort(), ["deckCount", "hands", "playOrder", "currentPlayer", "hasActed", "roundStatus", "revealed", "winner", "pileCounts", "potCount", "contributions", "battleResult"].sort());
+    assert.equal(v.tablePlacements!.length, s.battle!.placements.length);
+    for (const placement of v.tablePlacements!) {
+      if (placement.face === "down") assert.equal(placement.card, null);
+      else assert.ok(placement.card);
+    }
+    assert.deepEqual(Object.keys(v).sort(), ["deckCount", "hands", "playOrder", "currentPlayer", "hasActed", "roundStatus", "revealed", "winner", "pileCounts", "potCount", "contributions", "tablePlacements", "battleResult"].sort());
     assert.equal(v.revealed, false);
     if (v.contributions!.length) v.contributions![0].card.rank = "A";
+    if (v.tablePlacements!.length) v.tablePlacements![0].ownerID = "mutated";
     v.pileCounts!.a = -1;
   }
   assert.deepEqual(s, before);
@@ -58,6 +64,8 @@ test("ordinary battles append in seat order, alternate authorization and replace
   assert.deepEqual(n.hands.b, [...s.hands.b.slice(1), s.hands.a[0], s.hands.b[0]]);
   assert.deepEqual(n.battle!.result, { type: "player", playerID: "b" });
   assert.equal(n.winner, null); assert.equal(n.currentPlayer, "b");
+  assert.equal(n.battle!.placements.length, 2);
+  assert.ok(n.battle!.placements.every(item => item.face === "up" && item.card));
   const next = reveal(n);
   assert.equal(next.currentPlayer, "a");
   assert.equal(next.battle!.contributions.length, 2);
@@ -65,7 +73,7 @@ test("ordinary battles append in seat order, alternate authorization and replace
   conserved(next); privateViews(next);
 });
 
-test("repeated ties preserve chronological pot order and expose only face-up contributions", () => {
+test("repeated ties preserve chronological pot order and expose only face-up identities", () => {
   const a = Array.from({ length: 13 }, (_, i) => i).concat(Array.from({ length: 13 }, (_, i) => 26 + i));
   const b = cards.map((_, i) => i).filter(i => !a.includes(i));
   [b[8], b[12]] = [b[12], b[8]];
@@ -73,6 +81,8 @@ test("repeated ties preserve chronological pot order and expose only face-up con
   const expectedPot = [s.hands.a[0], s.hands.b[0], ...s.hands.a.slice(1, 5), ...s.hands.b.slice(1, 5), ...s.hands.a.slice(5, 9), ...s.hands.b.slice(5, 9)];
   assert.deepEqual(n.hands.b, [...s.hands.b.slice(9), ...expectedPot]);
   assert.deepEqual(n.battle!.contributions.map(c => c.card), [s.hands.a[0], s.hands.b[0], s.hands.a[4], s.hands.b[4], s.hands.a[8], s.hands.b[8]]);
+  assert.equal(n.battle!.placements.filter(item => item.face === "down").length, 12);
+  assert.deepEqual([...new Set(n.battle!.placements.map(item => item.sequence))], [0, 1, 2]);
   conserved(n); privateViews(n);
 });
 
@@ -104,7 +114,7 @@ test("all 52 ownership completes without revealing the winning pile; fresh setup
   assert.equal(n.roundStatus, "complete"); assert.equal(n.hands.a.length, 52);
   conserved(n); privateViews(n);
   const fresh = start(); assert.equal(fresh.battle!.result, null); assert.equal(fresh.winner, null);
-  assert.deepEqual(fresh.battle!.contributions, []); privateViews(fresh);
+  assert.deepEqual(fresh.battle!.contributions, []); assert.deepEqual(fresh.battle!.placements, []); privateViews(fresh);
 });
 
 test("paired actions reject wrong identities, actions and completed rounds without mutation", () => {
