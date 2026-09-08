@@ -10,6 +10,7 @@ import QRCode from "qrcode";
 import { GameBoard } from "./GameBoard";
 import { WarBoard } from "./WarBoard";
 import { CrazyEightsBoard } from "./CrazyEightsBoard";
+import { GameCreator } from "./GameCreator";
 import { useRoomSeats } from "./WaitingRoom";
 
 const HighestCardClient = Client({ game: SimpleCardGame, board: GameBoard,
@@ -27,6 +28,7 @@ const gameLabel = (game: GameName) => game === "war" ? "War" : game === "crazy-e
 export default function App() {
   const [tableRoom] = useState(() => new URLSearchParams(window.location.search).get("table"));
   const isTable = tableRoom !== null;
+  const [creatorOpen, setCreatorOpen] = useState(() => !isTable && new URLSearchParams(window.location.search).get("creator") === "1");
   const [gameName, setGameName] = useState<GameName>(() => parseGame(new URLSearchParams(window.location.search).get("game")));
   const [playerID, setPlayerID] = useState("");
   const [playerName, setPlayerName] = useState("Player");
@@ -36,7 +38,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const [busy, setBusy] = useState(false);
-  const { seats, error: seatsError } = useRoomSeats(serverUrl, joined ? "" : matchID, gameName);
+  const { seats, error: seatsError } = useRoomSeats(serverUrl, joined || creatorOpen ? "" : matchID, gameName);
   const [roomQr, setRoomQr] = useState<string | null>(null);
   const lobbyClient = useMemo(() => new LobbyClient({ server: serverUrl }), []);
   const ActiveGameClient = gameName === "war" ? WarClient : gameName === "crazy-eights" ? CrazyEightsClient : HighestCardClient;
@@ -105,7 +107,10 @@ export default function App() {
         {!matchID || seatsError ? <section className="board"><p className="error" role="alert">{!matchID ? "This table link is missing a room code. Ask the host for the public table link." : seatsError}</p></section> :
           seats.length === 0 ? <p role="status">Loading public table…</p> : <ActiveGameClient matchID={matchID} />}
       </>}
-      {!isTable && !joined && <section className="join">
+
+      {!isTable && !joined && creatorOpen && <GameCreator onClose={() => setCreatorOpen(false)} />}
+
+      {!isTable && !joined && !creatorOpen && <section className="join">
         <h2>Join a room</h2>
         <label htmlFor="game">Game
           <select id="game" value={gameName} onChange={event => selectGame(event.target.value)}>
@@ -143,6 +148,9 @@ export default function App() {
         </div>
         {matchID && roomQr && <div className="qr"><img src={roomQr} alt={`Room ${matchID} QR`} /><span>Scan to join this {gameLabel(gameName)} room</span></div>}
         {(error || seatsError) && <p className="error">{error || seatsError}</p>}
+        <div className="join-actions">
+          <button type="button" className="button-quiet" onClick={() => setCreatorOpen(true)}>Open Game Creator</button>
+        </div>
       </section>}
 
       {joined && <section className="join room-share"><p>{gameLabel(gameName)} · Room: <strong>{matchID}</strong> — <a href={`/?room=${encodeURIComponent(matchID)}&game=${encodeURIComponent(gameName)}`}>Join link</a></p>
