@@ -23,6 +23,7 @@ export function CrazyEightsBoard({ G, ctx, moves, matchData, playerID, matchID, 
   const name = (id: string) => matchData?.find(player => String(player.id) === id)?.name ?? `Player ${Number(id) + 1}`;
   const isLegal = (card: typeof hand[number]) => card.rank === "8" || card.suit === G.activeSuit || card.rank === top?.rank;
   const hasLegal = hand.some(isLegal);
+  const hasWild = hand.some(card => card.rank === "8");
   const winnerName = G.winner?.type === "player" ? name(G.winner.playerID) : null;
   const status = complete ? G.winner?.type === "tie" ? "No draw cards remain. The game ends tied." :
     winnerName ? `${winnerName} empties their hand and wins` : "Game complete" :
@@ -59,13 +60,13 @@ export function CrazyEightsBoard({ G, ctx, moves, matchData, playerID, matchID, 
 
       {!isTable && !complete && <section className="players" aria-label="Your private hand">
         <div className="zone-heading"><span /> <h3>YOUR HAND</h3> <span /></div>
-        <div className="crazy-controls">
+        {isTurn && hasWild && <div className="crazy-controls">
           <label>Suit for an 8
-            <select value={wildSuit} onChange={event => setWildSuit(event.target.value as Suit)} disabled={!isTurn}>
+            <select value={wildSuit} onChange={event => setWildSuit(event.target.value as Suit)}>
               {suits.map(suit => <option key={suit} value={suit}>{suit}</option>)}
             </select>
           </label>
-        </div>
+        </div>}
         <ul className="crazy-hand">{hand.map((card, index) => {
           const legal = isLegal(card);
           return <li key={`${card.suit}-${card.rank}-${index}`}>
