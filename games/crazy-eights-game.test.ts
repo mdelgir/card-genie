@@ -76,7 +76,7 @@ test("Crazy Eights adapter views keep other hands/deck/discard history private",
     deck: state.deck, hands: state.hands, discard: state.discard,
     discardTop: state.discard?.at(-1) ?? null, activeSuit: state.activeSuit ?? null,
     started: true, roundStatus: state.roundStatus, playOrder: state.playOrder,
-    handCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length)), winner: state.winner,
+    handCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])), winner: state.winner,
   });
   for (const playerID of ["0", "1", null, undefined, "unknown"]) {
     const actual = view(G, playerID);
