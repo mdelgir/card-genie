@@ -6,6 +6,7 @@ import {
   type Contribution,
   type RoundState,
   type RoundView,
+  type TablePlacement,
   type Winner,
 } from "./engine/runtime";
 import { warDefinition } from "./definitions/war";
@@ -15,6 +16,7 @@ export interface WarGameState {
   piles: Record<string, Card[]>;
   pot: Card[];
   contributions: Contribution[];
+  tablePlacements: TablePlacement[];
   started: boolean;
   roundStatus: "waiting" | "playing" | "complete";
   playOrder: string[];
@@ -33,6 +35,14 @@ const runtime = initialized.runtime;
 const copyCard = (card: Card): Card => ({ suit: card.suit, rank: card.rank, value: card.value });
 const copyWinner = (winner: Winner): Winner => winner === null ? null :
   winner.type === "tie" ? { type: "tie" } : { type: "player", playerID: winner.playerID };
+const copyPlacement = (placement: TablePlacement): TablePlacement => ({
+  zone: placement.zone,
+  sequence: placement.sequence,
+  face: placement.face,
+  ownerID: placement.ownerID,
+  placedBy: placement.placedBy,
+  card: placement.card ? copyCard(placement.card) : null,
+});
 
 // Explicit copies detach boardgame.io Immer drafts before the pure runtime clones state.
 const toRound = (G: WarGameState, currentPlayer = G.playOrder[0]): RoundState => ({
@@ -47,17 +57,19 @@ const toRound = (G: WarGameState, currentPlayer = G.playOrder[0]): RoundState =>
   battle: {
     pot: G.pot.map(copyCard),
     contributions: G.contributions.map(({ playerID, card }) => ({ playerID, card: copyCard(card) })),
+    placements: G.tablePlacements.map(copyPlacement),
     result: copyWinner(G.battleResult),
   },
 });
 
 const acceptRound = (G: WarGameState, round: RoundState) => {
-  const battle = round.battle ?? { pot: [], contributions: [], result: null };
+  const battle = round.battle ?? { pot: [], contributions: [], placements: [], result: null };
   Object.assign(G, {
     deck: round.deck.map(copyCard),
     piles: Object.fromEntries(Object.entries(round.hands).map(([id, cards]) => [id, cards.map(copyCard)])),
     pot: battle.pot.map(copyCard),
     contributions: battle.contributions.map(({ playerID, card }) => ({ playerID, card: copyCard(card) })),
+    tablePlacements: battle.placements.map(copyPlacement),
     started: true,
     roundStatus: round.roundStatus,
     playOrder: [...round.playOrder],
@@ -73,6 +85,7 @@ const visibleFields = (visible: RoundView) => ({
   piles: Object.fromEntries(visible.playOrder.map(id => [id, [] as Card[]])),
   pot: [] as Card[],
   contributions: (visible.contributions ?? []).map(({ playerID, card }) => ({ playerID, card: copyCard(card) })),
+  tablePlacements: (visible.tablePlacements ?? []).map(copyPlacement),
   playOrder: [...visible.playOrder],
   pileCounts: { ...(visible.pileCounts ?? {}) },
   potCount: visible.potCount ?? 0,
@@ -94,6 +107,7 @@ export const WarGame: Game<WarGameState> = {
       piles: Object.fromEntries(playOrder.map(id => [id, []])),
       pot: [],
       contributions: [],
+      tablePlacements: [],
       started: false,
       roundStatus: "waiting",
       playOrder,
