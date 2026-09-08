@@ -4,8 +4,36 @@
 .shelem-scores th, .shelem-scores td { padding: .65rem; text-align: left; border-bottom: 1px solid #cbd6cf; }
 .shelem-circle { display: grid; grid-template-columns: minmax(100px,1fr) minmax(170px,2fr) minmax(100px,1fr); grid-template-rows: auto auto auto; gap: .75rem; border-radius: 2rem; padding: 1rem; background: #154d3a; color: #fff5dd; }
 .shelem-seat { display: flex; align-items: center; flex-direction: column; gap: .3rem; padding: .4rem; border: 2px solid transparent; border-radius: 1rem; text-align: center; }
-.shelem-seat-0 { grid-area: 3 / 2; }.shelem-seat-1 { grid-area: 2 / 1; }.shelem-seat-2 { grid-area: 1 / 2; }.shelem-seat-3 { grid-area: 2 / 3; }
+/* Seat-array order is the game's rightward direction: bottom -> right -> top -> left. */
+.shelem-seat-0 { grid-area: 3 / 2; }.shelem-seat-1 { grid-area: 2 / 3; }.shelem-seat-2 { grid-area: 1 / 2; }.shelem-seat-3 { grid-area: 2 / 1; }
 .shelem-active { border-color: #e8c973; }.shelem-seat-0 strong,.shelem-seat-2 strong { color:#ffe3a0; }.shelem-seat-1 strong,.shelem-seat-3 strong { color:#b5e4ff; }
 .shelem-center { grid-area: 2 / 2; text-align: center; min-width:0; }.shelem-trick,.shelem-opaque { display:flex; gap:.4rem; justify-content:center; flex-wrap:wrap; }.shelem-trick small,.shelem-opaque small { display:block; }
-.shelem-controls,.shelem-hand { display:flex; flex-wrap:wrap; gap:.45rem; margin:1rem 0; }.shelem-hand button { padding:.2rem; background:transparent; border:2px solid transparent; }.shelem-hand button[aria-pressed="true"] { border-color:#a66e0d; transform:translateY(-5px); }.shelem-hand button:disabled { opacity:.6; }.shelem-auction { margin:1rem 0; }.shelem-auction ol { max-height:9rem; overflow:auto; }
-@media(max-width:600px) { .shelem-circle { grid-template-columns: minmax(64px,1fr) minmax(90px,1.7fr) minmax(64px,1fr); padding:.35rem; gap:.15rem; border-radius:1rem; font-size:.8rem; }.shelem-seat { padding:.1rem; }.shelem-seat .playing-card { width:48px; }.shelem-center .playing-card { width:48px; }.shelem-hand .playing-card { width:65px; } }
+.shelem-controls { display:flex; flex-wrap:wrap; gap:.45rem; margin:1rem 0; }
+.shelem-auction { margin:1rem 0; }.shelem-auction ol { max-height:9rem; overflow:auto; }
+.shelem-hand-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:end; gap:.5rem 1rem; margin-top:1rem; }
+.shelem-hand-heading h3 { margin:.25rem 0; }
+.shelem-hand-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; }
+.shelem-hand-toolbar small { opacity:.8; }
+.shelem-hand-toolbar button[aria-pressed="true"] { outline:2px solid #8f6f22; outline-offset:1px; }
+.shelem-hand { display:flex; margin:1rem 0; min-height:150px; }
+.shelem-hand--spread { flex-wrap:wrap; gap:.45rem; }
+.shelem-hand--stacked { flex-wrap:nowrap; gap:0; overflow-x:auto; overflow-y:visible; padding:.8rem 0 1.1rem .2rem; }
+.shelem-hand-card { position:relative; flex:0 0 auto; touch-action:none; cursor:grab; transition:transform 100ms ease, margin 120ms ease; }
+.shelem-hand-card:active,.shelem-hand-card--dragging { cursor:grabbing; }
+.shelem-hand-card--dragging { transform:translateY(-8px) scale(1.02); filter:drop-shadow(0 8px 8px #0004); }
+.shelem-hand-card > button { display:block; padding:.2rem; background:transparent; border:2px solid transparent; border-radius:.65rem; }
+.shelem-hand-card > button[aria-pressed="true"] { border-color:#a66e0d; transform:translateY(-5px); }
+.shelem-hand-card > button:disabled { opacity:.6; }
+.shelem-hand--stacked .shelem-hand-card + .shelem-hand-card { margin-left:-68px; }
+.shelem-hand--stacked .shelem-hand-card:hover,.shelem-hand--stacked .shelem-hand-card:focus-within { transform:translateY(-7px); }
+.shelem-hand--stacked .shelem-hand-card--dragging { transform:translateY(-10px) scale(1.02); }
+@media(max-width:600px) {
+  .shelem-circle { grid-template-columns: minmax(64px,1fr) minmax(90px,1.7fr) minmax(64px,1fr); padding:.35rem; gap:.15rem; border-radius:1rem; font-size:.8rem; }
+  .shelem-seat { padding:.1rem; }.shelem-seat .playing-card { width:48px; }.shelem-center .playing-card { width:48px; }
+  .shelem-hand .playing-card { width:65px; }
+  .shelem-hand { min-height:105px; }
+  .shelem-hand--stacked .shelem-hand-card + .shelem-hand-card { margin-left:-43px; }
+  .shelem-hand-toolbar { width:100%; }
+  .shelem-hand-toolbar small { flex-basis:100%; }
+}
+@media (prefers-reduced-motion: reduce) { .shelem-hand-card { transition:none; } }
