@@ -120,6 +120,14 @@ export interface AuctionDefinition {
   preparation: "shuffle-first-cut-later";
   packet: { hand: 12; kitty: 4; kittyBefore: "dealer" };
   scores: "frozen-at-deal-start";
+  /** Optional staged setup. Discard indices refer to the current private hand;
+   * submitted order defines the stack top-to-bottom, remaining hand order stays.
+   */
+  declarerSetup?: {
+    pickup: { type: "take-kitty" };
+    discard: { type: "discard-owned"; count: 4; face: "down"; destination: "declarer-team"; order: "submitted" };
+    next: "declarer-leads";
+  };
 }
 
 export interface ValidationError {

@@ -93,10 +93,10 @@ test("bids increase in fives, passes are permanent, last bidder chooses trump on
   rejected(s, "1", { type: "choose-trump", suit: "stars" });
   const old = structuredClone(s);
   s = act(s, { type: "choose-trump", suit: "hearts" });
-  assert.equal(s.auction!.phase, "ready"); assert.equal(s.auction!.trump, "hearts");
+  assert.equal(s.auction!.phase, "take-kitty"); assert.equal(s.auction!.trump, "hearts");
   assert.equal(s.roundStatus, "playing"); assert.deepEqual(s.hands, old.hands);
   assert.deepEqual(s.auction!.kitty, old.auction!.kitty);
-  for (const action of [{ type: "choose-trump", suit: "clubs" }, { type: "take-kitty" }, { type: "pass" }]) rejected(s, "1", action);
+  for (const action of [{ type: "choose-trump", suit: "clubs" }, { type: "pass" }]) rejected(s, "1", action);
   assert.equal(runtime.nextDeal!(s, () => 0).ok, false);
 });
 

@@ -13,7 +13,7 @@ export interface AuctionView {
   dealer: string;
   teams: Record<string, string>;
   scores: { "0": number; "1": number };
-  phase: "bidding" | "redeal-required" | "choose-trump" | "ready";
+  phase: "bidding" | "redeal-required" | "choose-trump" | "take-kitty" | "discard" | "ready";
   passed: string[];
   highBid: number | null;
   highBidder: string | null;
@@ -21,9 +21,12 @@ export interface AuctionView {
   trump: Suit | null;
   kittyCount: number;
   history: { playerID: string; bid: number | null }[];
+  discardStack?: { count: number; face: "down"; teamID: string; placedBy: string };
 }
-export interface AuctionState extends Omit<AuctionView, "kittyCount"> {
+export interface AuctionState extends Omit<AuctionView, "kittyCount" | "discardStack"> {
   kitty: Card[];
+  /** Separate initial stack for later merge with the team's trick collection. */
+  discardStack?: { cards: Card[]; teamID: string; placedBy: string };
 }
 const cardCopy = (c: Card): Card => ({ suit: c.suit, rank: c.rank, value: c.value });
 const fail = (message: string): RuntimeResult => ({ ok: false, error: { code: "invalid-action", message } });
@@ -110,7 +113,43 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
             !keys.includes("suit") || !["spades", "hearts", "diamonds", "clubs"].includes(fields.suit as string)) return fail("Declarer must choose a suit.");
         const next = structuredClone(state);
         next.auction!.trump = fields.suit as Suit;
+        next.auction!.phase = rules.declarerSetup ? "take-kitty" : "ready";
+        return { ok: true, state: next };
+      }
+      if (rules.declarerSetup && (a.phase === "take-kitty" || a.phase === "discard")) {
+        if (playerID !== a.declarer || !a.trump || a.discardStack) return fail("Only the declarer may complete setup once.");
+        const hand = state.hands[playerID];
+        if (a.phase === "take-kitty") {
+          if (fields.type !== "take-kitty" || keys.length !== 1 || hand.length !== rules.packet.hand ||
+              a.kitty.length !== rules.packet.kitty) return fail("Expected one kitty pickup after trump selection.");
+          const next = structuredClone(state);
+          next.hands[playerID].push(...next.auction!.kitty.splice(0));
+          next.auction!.phase = "discard";
+          return { ok: true, state: next };
+        }
+        if (fields.type !== "discard-owned" || keys.length !== 2 || !keys.includes("cardIndices") ||
+            hand.length !== rules.packet.hand + rules.packet.kitty) return fail("Select exactly four owned cards.");
+        const indices: number[] = [];
+        try {
+          const input = fields.cardIndices;
+          const count = rules.declarerSetup.discard.count;
+          if (!Array.isArray(input) || Object.getPrototypeOf(input) !== Array.prototype || input.length !== count ||
+              Reflect.ownKeys(input).length !== count + 1) return fail("Expected four plain card indices.");
+          for (let i = 0; i < count; i++) {
+            const d = Object.getOwnPropertyDescriptor(input, String(i));
+            if (!d || !d.enumerable || !("value" in d) || !Number.isInteger(d.value) ||
+                d.value < 0 || d.value >= hand.length) return fail("Invalid owned-card index.");
+            indices.push(d.value);
+          }
+        } catch { return fail("Card selection could not be inspected."); }
+        if (new Set(indices).size !== indices.length) return fail("Discard cards must be distinct.");
+        const next = structuredClone(state);
+        next.auction!.discardStack = {
+          cards: indices.map(i => next.hands[playerID][i]), teamID: a.teams[playerID], placedBy: playerID,
+        };
+        next.hands[playerID] = next.hands[playerID].filter((_, i) => !indices.includes(i));
         next.auction!.phase = "ready";
+        next.currentPlayer = playerID;
         return { ok: true, state: next };
       }
       if (a.phase !== "bidding") return fail("Auction is not accepting bids.");
@@ -154,6 +193,10 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
           passed: [...a.passed], highBid: a.highBid, highBidder: a.highBidder,
           declarer: a.declarer, trump: a.trump, kittyCount: a.kitty.length,
           history: a.history.map(h => ({ playerID: h.playerID, bid: h.bid })),
+          ...(a.discardStack ? { discardStack: {
+            count: a.discardStack.cards.length, face: "down" as const,
+            teamID: a.discardStack.teamID, placedBy: a.discardStack.placedBy,
+          } } : {}),
         },
       };
     },

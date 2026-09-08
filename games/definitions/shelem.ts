@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Auction foundation only: no kitty pickup, trick play, or scoring yet. */
+/** Through declarer setup only; no trick play or scoring yet. */
 export const shelemDefinition = {
   schemaVersion: 1, id: "shelem", name: "Shelem", players: { min: 4, max: 4 },
   setup: { deck: "standard-52", roundStart: { type: "shuffle" } },
@@ -12,5 +12,10 @@ export const shelemDefinition = {
     trump: "choose-suit", teams: "opposite-seats", direction: "right",
     dealer: "rotate-after-completed-deal", preparation: "shuffle-first-cut-later",
     packet: { hand: 12, kitty: 4, kittyBefore: "dealer" }, scores: "frozen-at-deal-start",
+    declarerSetup: {
+      pickup: { type: "take-kitty" },
+      discard: { type: "discard-owned", count: 4, face: "down", destination: "declarer-team", order: "submitted" },
+      next: "declarer-leads",
+    },
   },
 } satisfies GameDefinition;

@@ -115,7 +115,17 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     tagged(turn.progression, "turn.progression", ["next-player"]);
     tagged(root.roundEnd, "roundEnd", ["external-completion"]);
     tagged(root.winner, "winner", ["deferred"]);
-    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores"]);
+    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores", "declarerSetup"]);
+    if (Object.prototype.hasOwnProperty.call(auction, "declarerSetup")) {
+      const setup = object(auction.declarerSetup, "auction.declarerSetup", ["pickup", "discard", "next"]);
+      tagged(setup.pickup, "auction.declarerSetup.pickup", ["take-kitty"]);
+      const discard = tagged(setup.discard, "auction.declarerSetup.discard", ["discard-owned"], ["count", "face", "destination", "order"]);
+      choice(discard.count, "auction.declarerSetup.discard.count", [4]);
+      choice(discard.face, "auction.declarerSetup.discard.face", ["down"]);
+      choice(discard.destination, "auction.declarerSetup.discard.destination", ["declarer-team"]);
+      choice(discard.order, "auction.declarerSetup.discard.order", ["submitted"]);
+      choice(setup.next, "auction.declarerSetup.next", ["declarer-leads"]);
+    }
     const values = { min: 100, max: 165, step: 5, pass: "permanent", openingPasses: 3,
       trump: "choose-suit", teams: "opposite-seats", direction: "right", dealer: "rotate-after-completed-deal",
       preparation: "shuffle-first-cut-later", scores: "frozen-at-deal-start" };
