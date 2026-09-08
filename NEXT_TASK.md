@@ -1,9 +1,7 @@
-# Next Task — Creator test-play validation
+# Next Task — Shelem rule-model expansion
 
-Manual only unless a failure appears.
+Use `docs/shelem-rules.md` as the concrete specification.
 
-Create a game in Game Creator, use **Create test room**, join with a second player, start, play to completion/replay, and open the public table. Verify privacy and that behavior matches the Creator choices. Do Draw & Compare first; then preferably Battle or Matching.
+Add the smallest reusable data-only primitives needed for Shelem, starting with: fixed opposite-seat teams, rotating dealer/right-of seat order, ordered packet deal + face-down kitty, preserved deck order with cut-only preparation, and auction/pass/declarer/trump state. Do not add arbitrary executable hooks or Shelem-ID branching.
 
-Also explicitly verify one Crazy Eights wild 8 changes the public active suit to the chosen suit.
-
-Fix only failures. If this passes, next coding task is save/load/persistence for custom definitions.
+Keep Creator manual test-play validation as a pending gate; do not mark it complete without user exercise.
