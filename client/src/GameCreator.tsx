@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildCreatorDefinition, defaultCreatorDraft, type CreatorDraft, type CreatorFamily } from "@games/creator";
+import type { GameDefinition } from "@games/engine/types";
 import { validateGameDefinition } from "@games/engine/validator";
 import "./GameCreator.css";
 
@@ -17,24 +18,34 @@ const familyHelp: Record<CreatorFamily, string> = {
 
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
 
-export function GameCreator({ onClose }: { onClose: () => void }) {
+export function GameCreator({ onClose, onTest }: {
+  onClose: () => void;
+  onTest: (definition: GameDefinition, numPlayers: number) => void | Promise<void>;
+}) {
   const [draft, setDraft] = useState<CreatorDraft>(() => defaultCreatorDraft());
   const [idTouched, setIdTouched] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [testPlayers, setTestPlayers] = useState(2);
+  const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
 
   const definition = useMemo(() => buildCreatorDefinition(draft), [draft]);
   const validation = useMemo(() => validateGameDefinition(definition), [definition]);
   const json = useMemo(() => JSON.stringify(definition, null, 2), [definition]);
+  const testPlayerValid = Number.isInteger(testPlayers) && testPlayers >= definition.players.min && testPlayers <= definition.players.max;
 
   const patch = (next: Partial<CreatorDraft>) => setDraft(current => ({ ...current, ...next }));
   const chooseFamily = (family: CreatorFamily) => {
     const next = defaultCreatorDraft(family);
     setDraft(next);
+    setTestPlayers(next.minPlayers);
     setIdTouched(false);
     setCopied(false);
+    setTestError(null);
   };
   const changeName = (name: string) => {
     setDraft(current => ({ ...current, name, id: idTouched ? current.id : slug(name) }));
+    setTestError(null);
   };
   const copyDefinition = async () => {
     try {
@@ -43,6 +54,18 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+    }
+  };
+  const testGame = async () => {
+    if (!validation.ok || !testPlayerValid) return;
+    setTesting(true);
+    setTestError(null);
+    try {
+      await onTest(validation.definition, testPlayers);
+    } catch (error) {
+      setTestError(error instanceof Error ? error.message : "Unable to create the custom test room.");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -69,17 +92,17 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
         <fieldset className="creator-panel creator-grid">
           <legend>2. Identity</legend>
           <label>Game name<input value={draft.name} maxLength={100} onChange={event => changeName(event.target.value)} /></label>
-          <label>Game ID<input value={draft.id} maxLength={64} onChange={event => { setIdTouched(true); patch({ id: event.target.value }); }} />
+          <label>Game ID<input value={draft.id} maxLength={64} onChange={event => { setIdTouched(true); setTestError(null); patch({ id: event.target.value }); }} />
             <small>Lowercase kebab-case, used by saved definitions later.</small></label>
         </fieldset>
 
         {draft.family === "draw-compare" && <fieldset className="creator-panel creator-grid">
           <legend>3. Players & outcome</legend>
           <label>Minimum players<input type="number" min={2} max={8} value={draft.minPlayers}
-            onChange={event => patch({ minPlayers: Number(event.target.value) })} /></label>
+            onChange={event => { setTestError(null); patch({ minPlayers: Number(event.target.value) }); }} /></label>
           <label>Maximum players<input type="number" min={2} max={8} value={draft.maxPlayers}
-            onChange={event => patch({ maxPlayers: Number(event.target.value) })} /></label>
-          <label>Winner<select value={draft.rankWinner} onChange={event => patch({ rankWinner: event.target.value as CreatorDraft["rankWinner"] })}>
+            onChange={event => { setTestError(null); patch({ maxPlayers: Number(event.target.value) }); }} /></label>
+          <label>Winner<select value={draft.rankWinner} onChange={event => { setTestError(null); patch({ rankWinner: event.target.value as CreatorDraft["rankWinner"] }); }}>
             <option value="highest-wins">Highest rank wins</option><option value="lowest-wins">Lowest rank wins</option>
           </select></label>
           <p className="creator-note">Fixed by this rule family: standard 52-card deck, shuffle, one private draw per player, ace high, reveal after everyone acts, ties allowed.</p>
@@ -87,14 +110,14 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
 
         {draft.family === "paired-battle" && <fieldset className="creator-panel creator-grid">
           <legend>3. Battle table</legend>
-          <label>Table zone<input value={draft.tableZone} maxLength={32} onChange={event => patch({ tableZone: event.target.value })} />
+          <label>Table zone<input value={draft.tableZone} maxLength={32} onChange={event => { setTestError(null); patch({ tableZone: event.target.value }); }} />
             <small>Lowercase kebab-case. The renderer can present each zone differently later.</small></label>
           <label>Ownership while on table<select value={draft.tableOwnership}
-            onChange={event => patch({ tableOwnership: event.target.value as CreatorDraft["tableOwnership"] })}>
+            onChange={event => { setTestError(null); patch({ tableOwnership: event.target.value as CreatorDraft["tableOwnership"] }); }}>
             <option value="neutral">Neutral pot</option><option value="placer">Remains owned by placer</option>
           </select></label>
           <label>Remember who placed it<select value={draft.tableAttribution}
-            onChange={event => patch({ tableAttribution: event.target.value as CreatorDraft["tableAttribution"] })}>
+            onChange={event => { setTestError(null); patch({ tableAttribution: event.target.value as CreatorDraft["tableAttribution"] }); }}>
             <option value="placer">Yes</option><option value="none">No</option>
           </select></label>
           <p className="creator-note">Fixed by this v0 family: exactly 2 players, 26-card piles, high card wins, 3 face-down + 1 face-up on ties, insufficient cards lose.</p>
@@ -105,8 +128,19 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
           <p className="creator-note">Current safe vocabulary fixes this family to 2–4 players, 5 cards each, suit-or-rank matching, 8 as the wild rank, one fallback draw, and first empty hand wins. More controls will appear as the DSL gains proven primitives.</p>
         </fieldset>}
 
+        <fieldset className="creator-panel creator-test-row">
+          <legend>4. Test play</legend>
+          <label>Players<input type="number" min={definition.players.min} max={definition.players.max} value={testPlayers}
+            onChange={event => { setTestError(null); setTestPlayers(Number(event.target.value)); }} /></label>
+          <button type="button" onClick={testGame} disabled={!validation.ok || !testPlayerValid || testing}>
+            {testing ? "Creating test room…" : "Create test room"}
+          </button>
+          <small>Runs this exact validated definition through the generic authoritative server adapter.</small>
+          {testError && <p className="error" role="alert">{testError}</p>}
+        </fieldset>
+
         <div className={`creator-validation ${validation.ok ? "creator-validation--ok" : "creator-validation--error"}`} role="status">
-          {validation.ok ? <><strong>Definition valid</strong><span>Ready to save/test once dynamic custom-game sessions are wired.</span></> : <>
+          {validation.ok ? <><strong>Definition valid</strong><span>Ready for authoritative test play.</span></> : <>
             <strong>{validation.errors.length} validation {validation.errors.length === 1 ? "error" : "errors"}</strong>
             <ul>{validation.errors.map((error, index) => <li key={`${error.path}-${index}`}><code>{error.path}</code> — {error.message}</li>)}</ul>
           </>}

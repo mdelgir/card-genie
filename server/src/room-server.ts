@@ -5,16 +5,18 @@ import { Master } from "boardgame.io/master";
 import { SimpleCardGame } from "../../games/simple-card-game";
 import { WarGame } from "../../games/war-game";
 import { CrazyEightsGame } from "../../games/crazy-eights-game";
+import { CustomCardGame } from "../../games/custom-card-game";
 import { PrivateStateSocketIO } from "./private-state-transport";
 import { readServerConfig, isAllowedOrigin } from "./config";
 import type { ServerOptions } from "socket.io";
 
-const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame];
+const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame, CustomCardGame];
 const gamesByName = new Map(registeredGames.map(game => [game.name!, game]));
 const allowedMoves = new Map<string, Set<string>>([
   [SimpleCardGame.name!, new Set(["drawCard", "restartGame"])],
   [WarGame.name!, new Set(["revealBattle", "restartGame"])],
   [CrazyEightsGame.name!, new Set(["playCard", "drawCard", "restartGame"])],
+  [CustomCardGame.name!, new Set(["playCard", "drawCard", "revealBattle", "restartGame"])],
 ]);
 
 class RoomTransport extends PrivateStateSocketIO {
@@ -58,7 +60,20 @@ export function createCardGenieServer(config = readServerConfig()) {
     if (!isAllowedOrigin(ctx.headers.origin, origins)) ctx.throw(403, "Origin is not allowed.");
     const create = ctx.path.match(/^\/games\/([^/]+)\/create$/);
     if (ctx.method === "POST" && create && gamesByName.has(create[1])) {
-      await next();
+      // Game setup runs inside boardgame.io's create route, after its JSON parser.
+      // CustomCardGame.setup validates the submitted definition and player range
+      // before any match is stored. Convert those validation exceptions to 400s.
+      try {
+        await next();
+      } catch (error) {
+        if (create[1] === CustomCardGame.name && error instanceof Error &&
+            (error.message.startsWith("Invalid custom game definition:") || error.message.startsWith("Custom game requires "))) {
+          ctx.status = 400;
+          ctx.body = error.message;
+          return;
+        }
+        throw error;
+      }
       if (ctx.status !== 200) return;
       const { matchID } = ctx.body as { matchID: string };
       const { metadata } = await server.db.fetch(matchID, { metadata: true });
