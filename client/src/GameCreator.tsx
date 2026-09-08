@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildCreatorDefinition, defaultCreatorDraft, type CreatorDraft, type CreatorFamily } from "@games/creator";
+import type { GameDefinition } from "@games/engine/types";
 import { validateGameDefinition } from "@games/engine/validator";
 import "./GameCreator.css";
 
@@ -17,19 +18,26 @@ const familyHelp: Record<CreatorFamily, string> = {
 
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
 
-export function GameCreator({ onClose }: { onClose: () => void }) {
+export function GameCreator({ onClose, onTest }: {
+  onClose: () => void;
+  onTest: (definition: GameDefinition, numPlayers: number) => void | Promise<void>;
+}) {
   const [draft, setDraft] = useState<CreatorDraft>(() => defaultCreatorDraft());
   const [idTouched, setIdTouched] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [testPlayers, setTestPlayers] = useState(2);
+  const [testing, setTesting] = useState(false);
 
   const definition = useMemo(() => buildCreatorDefinition(draft), [draft]);
   const validation = useMemo(() => validateGameDefinition(definition), [definition]);
   const json = useMemo(() => JSON.stringify(definition, null, 2), [definition]);
+  const testPlayerValid = Number.isInteger(testPlayers) && testPlayers >= definition.players.min && testPlayers <= definition.players.max;
 
   const patch = (next: Partial<CreatorDraft>) => setDraft(current => ({ ...current, ...next }));
   const chooseFamily = (family: CreatorFamily) => {
     const next = defaultCreatorDraft(family);
     setDraft(next);
+    setTestPlayers(next.minPlayers);
     setIdTouched(false);
     setCopied(false);
   };
@@ -44,6 +52,12 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
     } catch {
       setCopied(false);
     }
+  };
+  const testGame = async () => {
+    if (!validation.ok || !testPlayerValid) return;
+    setTesting(true);
+    try { await onTest(validation.definition, testPlayers); }
+    finally { setTesting(false); }
   };
 
   return <section className="creator" aria-labelledby="creator-title">
@@ -105,8 +119,18 @@ export function GameCreator({ onClose }: { onClose: () => void }) {
           <p className="creator-note">Current safe vocabulary fixes this family to 2–4 players, 5 cards each, suit-or-rank matching, 8 as the wild rank, one fallback draw, and first empty hand wins. More controls will appear as the DSL gains proven primitives.</p>
         </fieldset>}
 
+        <fieldset className="creator-panel creator-test-row">
+          <legend>4. Test play</legend>
+          <label>Players<input type="number" min={definition.players.min} max={definition.players.max} value={testPlayers}
+            onChange={event => setTestPlayers(Number(event.target.value))} /></label>
+          <button type="button" onClick={testGame} disabled={!validation.ok || !testPlayerValid || testing}>
+            {testing ? "Creating test room…" : "Create test room"}
+          </button>
+          <small>Runs this exact validated definition through the generic authoritative server adapter.</small>
+        </fieldset>
+
         <div className={`creator-validation ${validation.ok ? "creator-validation--ok" : "creator-validation--error"}`} role="status">
-          {validation.ok ? <><strong>Definition valid</strong><span>Ready to save/test once dynamic custom-game sessions are wired.</span></> : <>
+          {validation.ok ? <><strong>Definition valid</strong><span>Ready for authoritative test play.</span></> : <>
             <strong>{validation.errors.length} validation {validation.errors.length === 1 ? "error" : "errors"}</strong>
             <ul>{validation.errors.map((error, index) => <li key={`${error.path}-${index}`}><code>{error.path}</code> — {error.message}</li>)}</ul>
           </>}
