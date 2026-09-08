@@ -1,7 +1,17 @@
-# Next Task — Shelem rule-model expansion
+# Next Task — Shelem foundation
 
-Use `docs/shelem-rules.md` as the concrete specification.
+Read `docs/shelem-rules.md` first.
 
-Add the smallest reusable data-only primitives needed for Shelem, starting with: fixed opposite-seat teams, rotating dealer/right-of seat order, ordered packet deal + face-down kitty, preserved deck order with cut-only preparation, auction/pass/declarer/trump state, and public cumulative team-score snapshots that remain frozen during a deal. Do not expose live current-deal totals in player/spectator views. Do not add arbitrary executable hooks or Shelem-ID branching.
+Implement the smallest generic/data-only engine slice needed to reach **end of auction**:
+- exactly 4 seats; opposite-seat teams;
+- dealer + rightward seat order; dealer rotates only after a completed deal;
+- 12/12/12 + 4 face-down kitty + 12 packet deal;
+- preserve deck order across deals and support trusted cut-only preparation (no full reshuffle after the first deal);
+- auction: 100–165, multiples of 5, strictly increasing, permanent pass, first 3 passes => same dealer redeals, last bidder => declarer;
+- declarer chooses trump;
+- expose only public auction/dealer/team/kitty-count state; hands/kitty identities stay private;
+- include public cumulative team scores frozen for the current deal; do not expose live deal totals.
 
-Keep Creator manual test-play validation as a pending gate; do not mark it complete without user exercise.
+Do not implement kitty pickup/discard, trick play, deal scoring, match end, or Shelem UI yet. Do not branch on game id or add executable user rules.
+
+Add focused validator/runtime/privacy tests, keep existing games green, update `ledger.md`, commit, and stop.
