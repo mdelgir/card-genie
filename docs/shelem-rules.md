@@ -13,9 +13,24 @@ This document captures the concrete Shelem variant currently being targeted by C
 
 Shelem intentionally does **not** fully reshuffle the deck between deals.
 
-At the end of play, cards are gathered while preserving their physical stack order. Tricks are collected as ordered stacks, those stacks are ultimately gathered into one 52-card pile, and the next deal is prepared only by cutting that pile rather than randomizing all 52 cards.
+At the end of play, cards are gathered while preserving their physical stack order. Each won trick is placed on top of that team's existing collection pile without reordering the four cards inside the trick. This means the relative order of cards and trick stacks remains part of the next deal's deck state.
 
-A simple cut is a cyclic rotation of the existing deck order, so one or several ordinary cuts preserve the same adjacency structure. This is desirable: the previous deal tends to leave suit clusters in the deck, so a 12-card packet often has a dominant suit. Players commonly use that shape when deciding whether to bid or pass, but **having or lacking a dominant suit is not itself a rule** and must never be enforced by the engine.
+At deal end, the piles are merged in this exact order:
+
+1. The declarer's four-card face-down discard pile is placed on top of the declarer's team trick pile.
+2. The defenders' complete trick pile is then placed on top of that declarer pile.
+
+So, viewed from the top of the final 52-card stack downward, the order is:
+
+```text
+Defenders' collected trick pile
+Declarer's 4-card face-down discard pile
+Declarer's team's collected trick pile
+```
+
+Each component preserves its own internal physical order. The resulting 52-card stack becomes the starting deck order for the next deal.
+
+The next deal is prepared only by cutting that pile rather than randomizing all 52 cards. A simple cut is a cyclic rotation of the existing deck order, so one or several ordinary cuts preserve the same adjacency structure. This is desirable: the previous deal tends to leave suit clusters in the deck, so a 12-card packet often has a dominant suit. Players commonly use that shape when deciding whether to bid or pass, but **having or lacking a dominant suit is not itself a rule** and must never be enforced by the engine.
 
 The authoritative server therefore needs a trusted deck-preparation primitive that can preserve order across deals and apply a random cut without revealing the cut point or deck identities.
 
@@ -65,7 +80,7 @@ Those four discarded cards form one scoring hand worth 5 base points in addition
 - If no trump is played, the highest card of the led suit wins.
 - An off-suit, non-trump discard can never win the trick.
 
-The winning team's trick is collected as an ordered four-card stack, preserving play order. Subsequent trick stacks are also collected without internally reordering their cards so the physical deck order can be reconstructed for the next deal.
+The winning team's trick is collected as an ordered four-card stack, preserving play order. Each later won trick is placed on top of that team's existing pile, again without reordering the four cards. This ordered collection is authoritative game state because it determines the next deal's deck order.
 
 ## Points within a deal
 
@@ -128,11 +143,18 @@ Shelem should be implemented by extending the validated data-only rules model, n
 - trick-taking with follow-suit and trump legality,
 - trick winner becomes next leader,
 - ordered trick collection and persistent pile ordering,
+- deterministic end-of-deal pile stacking,
 - team-owned scoring piles with hidden card identities,
 - card-value + per-trick + initial-discard scoring,
 - contract scoring with threshold and special multipliers,
 - cumulative multi-deal match scoring and win conditions.
 
-## One implementation detail still to pin down
+## Deterministic pile merge
 
-For exact cross-deal deck reproduction, Card Genie still needs a deterministic rule for **how the two teams' collected trick piles and the declarer's initial four-card pile are stacked together into the single 52-card deck at deal end**. The cards inside each trick and the order of tricks are preserved; the final pile-to-pile merge order must also be specified before deck-continuity behavior can be byte-for-byte deterministic.
+Exact cross-deal deck reproduction is now specified. At deal end, after each team's trick pile has preserved all trick/card order:
+
+- declarer's four-card discard stack goes on top of the declarer's team pile;
+- defenders' entire pile goes on top of that;
+- the resulting 52-card pile is cut, not fully shuffled, before the next deal.
+
+This final merge order is part of the rules/runtime state and must be reproduced deterministically by the server.
