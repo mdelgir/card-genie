@@ -25,8 +25,7 @@
 
 - Repaired server compilation boundaries/start path and client type errors; isolated generated Vite config output.
 - Added goals.md and ledger.md, linked from README. Use ledger.md for current progress and validation; keep this file as historical context.
-
-- Build repair validated in the checkout: both production builds and all nine tests pass; compiled server and built-client preview respond successfully. See ledger.md for the remaining sandbox-specific development optimizer limitation.
+- Build repair validated in the checkout: both production builds and all nine tests pass; compiled server and built-client preview respond successfully.
 
 ## 2026-09-06 — Waiting room and start
 
@@ -37,3 +36,40 @@
 ## 2026-09-06 — Graphical cards
 
 - Added SVG card faces/backs, reusable card and board components, green felt surfaces, responsive layouts, and winner emphasis. Verified desktop/mobile appearance and hidden-card labels; see ledger.md for validation.
+
+## 2026-09-07 — Phase 1 hosted completion
+
+- Completed the Highest Card vertical slice with independent public-table and replay/privacy coverage.
+- Added Railway deployment configuration; user completed a hosted two-player PC + phone game.
+
+## 2026-09-07 — Generic definitions and runtime
+
+- Added a closed, versioned, data-only `GameDefinition` validator and authoritative generic runtime.
+- Migrated Highest Card, then added War and Crazy Eights to prove different rule families without arbitrary user code.
+- Added generic table-placement metadata for face-up/down cards, ownership, attribution, and sequence; War tie cards now use it.
+- Automated privacy coverage includes real SocketIO player/spectator paths.
+
+## 2026-09-07 — Game Creator
+
+- Added guided Game Creator v0 for the three proven rule families with live validation and inert JSON preview.
+- Added `custom-card-game` test rooms so validated Creator definitions run through the same authoritative runtime and privacy boundary.
+- Repaired test discovery to include root and nested game tests.
+
+## 2026-09-08 — Shelem specification and auction foundation
+
+- Added `docs/shelem-rules.md` covering fixed opposite-seat teams, packet deal + kitty, bidding, trump, trick play, scoring, multi-deal deck continuity, exact pile merge order, and public frozen cumulative-score visibility.
+- Added generic auction primitives: four seats, rightward order, rotating dealer after completed deals, 12/12/12 + 4 kitty + 12 deal, 100–165 bids in steps of 5, permanent pass, three-opening-pass same-dealer redeal, declarer, trump, and cut-only later deals.
+- Private hands/kitty and live current-deal totals remain absent from player/spectator views.
+
+## 2026-09-08 — Shelem declarer setup
+
+- Added private kitty pickup (12 → 16), declarer-only ordered four-card face-down discard, and transition to declarer-first trick leadership.
+- The discard stack keeps server-side identity/order for later scoring/deck reconstruction while public views expose only opaque count/team/placer metadata.
+- Builds pass and the suite reached 81 tests.
+
+## 2026-09-08 — Shelem trick play
+
+- Added generic follow-suit/trump trick-taking: declarer must lead trump first, players follow suit when able, trump wins over non-trump, otherwise highest led suit wins, Ace high, and trick winner leads next.
+- Twelve ordered tricks are collected into hidden team piles with newest trick on top while preserving internal play order and 52-card conservation.
+- Public views expose only active trick cards, winner/history metadata and team trick counts—not collected identities or live deal points.
+- State now reaches `ready-scoring`; builds pass and the suite reached 86 tests. Deal scoring, match completion, next-deal scoring integration, and Shelem UI remain future work.
