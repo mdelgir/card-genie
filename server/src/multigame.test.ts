@@ -60,10 +60,12 @@ test("server registers War and preserves private piles over SocketIO", async () 
       assert.deepEqual(state.G.deck, []);
       assert.deepEqual(state.G.piles, { "0": [], "1": [] });
       assert.deepEqual(state.G.pot, []);
+      assert.deepEqual(state.G.tablePlacements, []);
       assert.deepEqual(state.G.pileCounts, { "0": 26, "1": 26 });
       assert.deepEqual(initial.G.deck, []);
       assert.deepEqual(initial.G.piles, { "0": [], "1": [] });
       assert.deepEqual(initial.G.pot, []);
+      assert.deepEqual(initial.G.tablePlacements, []);
       assert.deepEqual(initial.plugins, {});
     }
 
@@ -77,6 +79,9 @@ test("server registers War and preserves private piles over SocketIO", async () 
       assert.deepEqual(G.pot, []);
       assert.equal(G.pileCounts["0"] + G.pileCounts["1"] + G.potCount, 52);
       assert.ok(G.contributions.every(entry => entry.card.rank && entry.card.suit));
+      assert.ok(G.tablePlacements.length >= 2);
+      assert.ok(G.tablePlacements.every(item => item.face === "down" ? item.card === null : Boolean(item.card?.rank && item.card?.suit)));
+      assert.ok(G.tablePlacements.every(item => item.zone === "battle" && item.ownerID === null && item.placedBy !== null));
     }
   } finally {
     clients.forEach(client => client.stop());
