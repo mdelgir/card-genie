@@ -8,9 +8,25 @@ import { validateGameDefinition } from "./validator";
 export type Shuffle = (indices: number[]) => number[];
 export type Winner = { type: "player"; playerID: string } | { type: "tie" } | null;
 export interface Contribution { playerID: string; card: Card }
+
+/** A placement record describes what was put on a public table zone during the
+ * latest authoritative action. The server keeps the card identity; playerView
+ * replaces face-down identities with null while preserving zone/ownership/
+ * attribution and sequence so clients can render the physical layout safely.
+ */
+export interface TablePlacement {
+  zone: string;
+  sequence: number;
+  face: "up" | "down";
+  ownerID: string | null;
+  placedBy: string | null;
+  card: Card | null;
+}
+
 export interface BattleState {
   pot: Card[];
   contributions: Contribution[];
+  placements: TablePlacement[];
   result: Winner;
 }
 export interface RoundState {
@@ -38,6 +54,7 @@ export interface RoundView {
   pileCounts?: Record<string, number>;
   potCount?: number;
   contributions?: Contribution[];
+  tablePlacements?: TablePlacement[];
   battleResult?: Winner;
   handCounts?: Record<string, number>;
   discardTop?: Card | null;
@@ -104,7 +121,7 @@ export function createGameRuntime(input: unknown):
         deck, playOrder, currentPlayer: playOrder[0], hands,
         hasActed: Object.fromEntries(playerIDs.map(id => [id, false])),
         roundStatus: "playing", revealed: false, winner: null,
-        ...(definition.battle ? { battle: { pot: [], contributions: [], result: null } } : {}),
+        ...(definition.battle ? { battle: { pot: [], contributions: [], placements: [], result: null } } : {}),
         ...(matchingState ?? {}),
       } };
     },
@@ -196,10 +213,11 @@ export function createGameRuntime(input: unknown):
       if (definition.battle) {
         const rules = definition.battle;
         const next = structuredClone(state);
-        const battle: BattleState = { pot: [], contributions: [], result: null };
+        const battle: BattleState = { pot: [], contributions: [], placements: [], result: null };
         next.battle = battle;
         let faceDown = 0;
         let faceUp = actionCount;
+        let sequence = 0;
         while (true) {
           const unable = next.playOrder.filter(id => next.hands[id].length < faceDown + faceUp);
           if (unable.length) {
@@ -220,6 +238,18 @@ export function createGameRuntime(input: unknown):
           for (const id of next.playOrder) {
             const cards = next.hands[id].splice(0, faceDown + faceUp);
             battle.pot.push(...cards);
+            const ownerID = rules.table.ownership === "placer" ? id : null;
+            const placedBy = rules.table.attribution === "placer" ? id : null;
+            for (let index = 0; index < cards.length; index++) {
+              battle.placements.push({
+                zone: rules.table.zone,
+                sequence,
+                face: index < faceDown ? "down" : "up",
+                ownerID,
+                placedBy,
+                card: copyCard(cards[index]),
+              });
+            }
             compared.push({ playerID: id, card: cards[faceDown] });
           }
           battle.contributions.push(...compared);
@@ -238,6 +268,7 @@ export function createGameRuntime(input: unknown):
           }
           faceDown = rules.ties.faceDown;
           faceUp = rules.ties.faceUp;
+          sequence += 1;
         }
         next.revealed = false;
         next.hasActed = Object.fromEntries(next.playOrder.map(id => [id, false]));
@@ -294,6 +325,14 @@ export function createGameRuntime(input: unknown):
           pileCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])),
           potCount: state.battle?.pot.length ?? 0,
           contributions: (state.battle?.contributions ?? []).map(({ playerID, card }) => ({ playerID, card: copyCard(card) })),
+          tablePlacements: (state.battle?.placements ?? []).map(placement => ({
+            zone: placement.zone,
+            sequence: placement.sequence,
+            face: placement.face,
+            ownerID: placement.ownerID,
+            placedBy: placement.placedBy,
+            card: placement.face === "up" && placement.card ? copyCard(placement.card) : null,
+          })),
           battleResult: copyWinner(state.battle?.result ?? null),
         } : {}),
       };
