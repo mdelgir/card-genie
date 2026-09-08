@@ -115,7 +115,14 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     tagged(turn.progression, "turn.progression", ["next-player"]);
     tagged(root.roundEnd, "roundEnd", ["external-completion"]);
     tagged(root.winner, "winner", ["deferred"]);
-    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores", "declarerSetup"]);
+    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores", "declarerSetup", "trickPlay"]);
+    if (Object.prototype.hasOwnProperty.call(auction, "trickPlay")) {
+      if (!auction.declarerSetup) error("auction.trickPlay", "contradictory-rule", "Trick play requires declarer setup.");
+      const trick = tagged(auction.trickPlay, "auction.trickPlay", ["follow-suit-trump"], ["firstLead", "rank", "nextLeader", "collection", "count"]);
+      for (const [key, value] of Object.entries({ firstLead: "trump", rank: "ace-high", nextLeader: "winner", collection: "newest-trick-on-top", count: 12 })) {
+        choice(trick[key], `auction.trickPlay.${key}`, [value], "unsupported-rule");
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(auction, "declarerSetup")) {
       const setup = object(auction.declarerSetup, "auction.declarerSetup", ["pickup", "discard", "next"]);
       tagged(setup.pickup, "auction.declarerSetup.pickup", ["take-kitty"]);

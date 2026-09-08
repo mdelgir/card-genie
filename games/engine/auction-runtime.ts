@@ -1,6 +1,7 @@
 import type { Card, Suit } from "./cards";
 import type { AuctionDefinition } from "./types";
 import type { GameRuntime, RoundState, RuntimeResult } from "./runtime";
+import { playTrickCard, trickView, type TrickState, type TrickView } from "./trick-runtime";
 
 /** Trusted source returns a cut offset, not a permutation or client argument. */
 export type Cut = (length: number) => number;
@@ -13,7 +14,8 @@ export interface AuctionView {
   dealer: string;
   teams: Record<string, string>;
   scores: { "0": number; "1": number };
-  phase: "bidding" | "redeal-required" | "choose-trump" | "take-kitty" | "discard" | "ready";
+  phase: "bidding" | "redeal-required" | "choose-trump" | "take-kitty" | "discard" | "ready" | "trick-play" | "ready-scoring";
+  tricks?: TrickView;
   passed: string[];
   highBid: number | null;
   highBidder: string | null;
@@ -23,7 +25,8 @@ export interface AuctionView {
   history: { playerID: string; bid: number | null }[];
   discardStack?: { count: number; face: "down"; teamID: string; placedBy: string };
 }
-export interface AuctionState extends Omit<AuctionView, "kittyCount" | "discardStack"> {
+export interface AuctionState extends Omit<AuctionView, "kittyCount" | "discardStack" | "tricks"> {
+  tricks?: TrickState;
   kitty: Card[];
   /** Separate initial stack for later merge with the team's trick collection. */
   discardStack?: { cards: Card[]; teamID: string; placedBy: string };
@@ -97,7 +100,7 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
     applyAction(state, playerID, action) {
       const a = state.auction;
       if (!a || state.roundStatus !== "playing" || !playerID || !state.playOrder.includes(playerID) ||
-          state.currentPlayer !== playerID || a.passed.includes(playerID)) return fail("Only the active auction participant may act.");
+          state.currentPlayer !== playerID || (a.phase === "bidding" && a.passed.includes(playerID))) return fail("Only the active participant may act.");
       const fields: Record<string, unknown> = Object.create(null);
       try {
         if (!action || typeof action !== "object" || Object.getPrototypeOf(action) !== Object.prototype) return fail("Expected a plain action.");
@@ -108,6 +111,10 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
         }
       } catch { return fail("Action could not be inspected."); }
       const keys = Object.keys(fields);
+      if (rules.trickPlay && fields.type === "play-card") {
+        if (keys.length !== 2 || !keys.includes("cardIndex")) return fail("Expected an owned card index only.");
+        return playTrickCard(state, playerID, fields.cardIndex, rules.trickPlay);
+      }
       if (a.phase === "choose-trump") {
         if (playerID !== a.declarer || fields.type !== "choose-trump" || keys.length !== 2 ||
             !keys.includes("suit") || !["spades", "hearts", "diamonds", "clubs"].includes(fields.suit as string)) return fail("Declarer must choose a suit.");
@@ -150,6 +157,10 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
         next.hands[playerID] = next.hands[playerID].filter((_, i) => !indices.includes(i));
         next.auction!.phase = "ready";
         next.currentPlayer = playerID;
+        if (rules.trickPlay) next.auction!.tricks = {
+          active: [], leader: playerID, completed: 0, lastWinner: null,
+          teamCounts: { "0": 0, "1": 0 }, collections: { "0": [], "1": [] },
+        };
         return { ok: true, state: next };
       }
       if (a.phase !== "bidding") return fail("Auction is not accepting bids.");
@@ -193,6 +204,7 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
           passed: [...a.passed], highBid: a.highBid, highBidder: a.highBidder,
           declarer: a.declarer, trump: a.trump, kittyCount: a.kitty.length,
           history: a.history.map(h => ({ playerID: h.playerID, bid: h.bid })),
+          ...(a.tricks ? { tricks: trickView(a.tricks) } : {}),
           ...(a.discardStack ? { discardStack: {
             count: a.discardStack.cards.length, face: "down" as const,
             teamID: a.discardStack.teamID, placedBy: a.discardStack.placedBy,

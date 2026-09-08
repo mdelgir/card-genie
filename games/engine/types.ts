@@ -128,6 +128,14 @@ export interface AuctionDefinition {
     discard: { type: "discard-owned"; count: 4; face: "down"; destination: "declarer-team"; order: "submitted" };
     next: "declarer-leads";
   };
+  trickPlay?: {
+    type: "follow-suit-trump";
+    firstLead: "trump";
+    rank: "ace-high";
+    nextLeader: "winner";
+    collection: "newest-trick-on-top";
+    count: 12;
+  };
 }
 
 export interface ValidationError {

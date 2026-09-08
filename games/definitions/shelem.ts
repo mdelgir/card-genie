@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Through declarer setup only; no trick play or scoring yet. */
+/** Through twelve tricks; scoring is not implemented yet. */
 export const shelemDefinition = {
   schemaVersion: 1, id: "shelem", name: "Shelem", players: { min: 4, max: 4 },
   setup: { deck: "standard-52", roundStart: { type: "shuffle" } },
@@ -17,5 +17,6 @@ export const shelemDefinition = {
       discard: { type: "discard-owned", count: 4, face: "down", destination: "declarer-team", order: "submitted" },
       next: "declarer-leads",
     },
+    trickPlay: { type: "follow-suit-trump", firstLead: "trump", rank: "ace-high", nextLeader: "winner", collection: "newest-trick-on-top", count: 12 },
   },
 } satisfies GameDefinition;
