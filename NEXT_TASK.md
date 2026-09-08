@@ -1,9 +1,9 @@
-# Next Task — Manual validation gate
+# Next Task — Creator test-play validation
 
-No new feature coding yet.
+Manual only unless a failure appears.
 
-User manually validates:
-- War: 2 players + public table; include a tie and confirm visible face-down placement stacks, counts, replay, and privacy.
-- Crazy Eights: 2 players + public table; private hands, legal play/draw, wild 8 suit choice, public discard/suit/counts, winner/replay.
+Create a game in Game Creator, use **Create test room**, join with a second player, start, play to completion/replay, and open the public table. Verify privacy and that behavior matches the Creator choices. Do Draw & Compare first; then preferably Battle or Matching.
 
-Fix only failures found. If both pass, update `ledger.md`; next coding phase is the Game Creator.
+Also explicitly verify one Crazy Eights wild 8 changes the public active suit to the chosen suit.
+
+Fix only failures. If this passes, next coding task is save/load/persistence for custom definitions.
