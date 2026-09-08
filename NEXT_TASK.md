@@ -1,17 +1,15 @@
-# Next Task — Shelem foundation
+# Next Task — Shelem declarer setup
 
-Read `docs/shelem-rules.md` first.
+Read `docs/shelem-rules.md` and the existing Shelem auction foundation first.
 
-Implement the smallest generic/data-only engine slice needed to reach **end of auction**:
-- exactly 4 seats; opposite-seat teams;
-- dealer + rightward seat order; dealer rotates only after a completed deal;
-- 12/12/12 + 4 face-down kitty + 12 packet deal;
-- preserve deck order across deals and support trusted cut-only preparation (no full reshuffle after the first deal);
-- auction: 100–165, multiples of 5, strictly increasing, permanent pass, first 3 passes => same dealer redeals, last bidder => declarer;
-- declarer chooses trump;
-- expose only public auction/dealer/team/kitty-count state; hands/kitty identities stay private;
-- include public cumulative team scores frozen for the current deal; do not expose live deal totals.
+Implement the smallest generic/data-only slice from **trump chosen** to **ready for trick play**:
+- declarer takes the 4-card kitty into their private hand (12 -> 16); kitty identities stay private;
+- declarer must choose exactly 4 owned cards to place face down into their team collection pile, preserving deterministic order for later deck reconstruction;
+- expose that discard only as a public opaque 4-card face-down stack/count with declarer/team attribution; never expose identities;
+- after discard, declarer has 12 cards, contract/trump remain public, and state becomes ready for trick play with declarer as first leader;
+- reject wrong-player, wrong-phase, duplicate/invalid-card, or wrong-count actions without mutation;
+- keep public cumulative team scores frozen at deal start and do not expose current-deal totals.
 
-Do not implement kitty pickup/discard, trick play, deal scoring, match end, or Shelem UI yet. Do not branch on game id or add executable user rules.
+Do not implement trick play, trick scoring, deal scoring, match end, or Shelem UI yet. No game-id branching or executable user rules.
 
-Add focused validator/runtime/privacy tests, keep existing games green, update `ledger.md`, commit, and stop.
+Add focused validator/runtime/privacy tests, keep all existing games/tests green, update `ledger.md`, commit, and stop.
