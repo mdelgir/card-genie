@@ -126,6 +126,18 @@ A team wins the match when either:
 - its cumulative score reaches at least **1165**, or
 - its lead over the opposing team reaches at least **1165**.
 
+## Board scoreboard and score visibility
+
+The shared board must always show a simple public score table for the two teams.
+
+- The table shows each team's **cumulative match score as of the beginning of the current deal**.
+- Those displayed totals remain frozen throughout auction, declarer setup and trick play.
+- The app must **not show a running current-deal score** for either team while the deal is in progress.
+- The authoritative server may track enough hidden/internal state to score the deal correctly, but no explicit live current-deal total should be exposed in player or spectator views.
+- Public cards/tricks already visible on the table remain visible as required by play; players may reason from them themselves, but Card Genie does not calculate or display a live deal total.
+- Once the deal ends and its scoring result is finalized, the cumulative team totals update atomically. Those new totals are then the public scoreboard values for the next deal.
+- The scoreboard is visible to all players and to the public table/spectator view.
+
 ## Generic engine capabilities Shelem should prove
 
 Shelem should be implemented by extending the validated data-only rules model, not by adding arbitrary executable user code. It is the concrete game that should drive the following reusable primitives:
@@ -147,7 +159,8 @@ Shelem should be implemented by extending the validated data-only rules model, n
 - team-owned scoring piles with hidden card identities,
 - card-value + per-trick + initial-discard scoring,
 - contract scoring with threshold and special multipliers,
-- cumulative multi-deal match scoring and win conditions.
+- cumulative multi-deal match scoring and win conditions,
+- public cumulative score snapshots that update only between deals while live deal totals remain unexposed.
 
 ## Deterministic pile merge
 
