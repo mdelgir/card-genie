@@ -6,7 +6,6 @@ import { SimpleCardGame } from "../../games/simple-card-game";
 import { WarGame } from "../../games/war-game";
 import { CrazyEightsGame } from "../../games/crazy-eights-game";
 import { CustomCardGame } from "../../games/custom-card-game";
-import { validateGameDefinition } from "../../games/engine/validator";
 import { PrivateStateSocketIO } from "./private-state-transport";
 import { readServerConfig, isAllowedOrigin } from "./config";
 import type { ServerOptions } from "socket.io";
@@ -61,22 +60,10 @@ export function createCardGenieServer(config = readServerConfig()) {
     if (!isAllowedOrigin(ctx.headers.origin, origins)) ctx.throw(403, "Origin is not allowed.");
     const create = ctx.path.match(/^\/games\/([^/]+)\/create$/);
     if (ctx.method === "POST" && create && gamesByName.has(create[1])) {
-      if (create[1] === CustomCardGame.name) {
-        const body = (ctx.request as typeof ctx.request & {
-          body?: { numPlayers?: unknown; setupData?: { definition?: unknown; hostName?: unknown } };
-        }).body;
-        const validation = validateGameDefinition(body?.setupData?.definition);
-        if (!validation.ok) {
-          ctx.throw(400, `Invalid custom game definition: ${JSON.stringify(validation.errors)}`);
-          return;
-        }
-        const numPlayers = body?.numPlayers;
-        if (!Number.isInteger(numPlayers) || (numPlayers as number) < validation.definition.players.min ||
-            (numPlayers as number) > validation.definition.players.max) {
-          ctx.throw(400, `Custom game requires ${validation.definition.players.min}–${validation.definition.players.max} players.`);
-          return;
-        }
-      }
+      // Game setup runs inside boardgame.io's create route, after its JSON parser.
+      // CustomCardGame.setup validates the submitted definition and player range
+      // before any match is stored. Reading ctx.request.body here *before* next()
+      // would run before that parser and incorrectly see an undefined definition.
       await next();
       if (ctx.status !== 200) return;
       const { matchID } = ctx.body as { matchID: string };
