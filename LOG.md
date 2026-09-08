@@ -73,3 +73,9 @@
 - Twelve ordered tricks are collected into hidden team piles with newest trick on top while preserving internal play order and 52-card conservation.
 - Public views expose only active trick cards, winner/history metadata and team trick counts—not collected identities or live deal points.
 - State now reaches `ready-scoring`; builds pass and the suite reached 86 tests. Deal scoring, match completion, next-deal scoring integration, and Shelem UI remain future work.
+
+## 2026-09-08 — Finish Shelem end-to-end
+
+Implemented the complete built-in Shelem path: authoritative contract scoring and exact 165-point conservation; ordered merge/cut-only next deals; same-dealer opening-pass redeals; cumulative score/lead match outcomes; fresh-match replay; four-seat boardgame.io/lobby integration; and responsive private-player/public-table UI. Existing privacy transport and authorization are preserved.
+
+Validation: both required production builds pass and all 93 tests pass. Added seven tests covering scoring boundaries/precedence, ordered deck continuity, match outcomes, complete adapter matches, authorization, and a full four-player-plus-spectator SocketIO match with automatic transitions, replay and fresh spectator reconnect/privacy comparisons. No manual browser/device/hosted validation was performed; those checks and fixes they uncover are the remaining Shelem follow-up. See ledger.md for exact evidence. Pre-existing package-lock.json changes were not included.

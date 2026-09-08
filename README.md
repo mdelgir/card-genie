@@ -64,3 +64,11 @@ Starting shuffles the 52-card deck and turn order. Each player draws one card on
 Room credentials are held in browser memory. Refresh recovery, host transfer, and a standalone table entrance are still pending. Restart the server/create fresh rooms when updating from the pre-waiting-room version.
 
 For API clients, POST /games/simple-card-game/create now returns matchID, playerID, and playerCredentials (with an optional setupData.hostName request value). POST /rooms/:id/start uses Authorization: Bearer <creator credentials>. Start remains a boardgame.io game transition; direct start moves over SocketIO are rejected.
+
+## Shelem
+
+Select **Shelem** in the lobby and create a four-player room. Share its join link with the other three players; use **Open public table** for a spectator screen. Links retain `game=shelem` (for example, `/?table=<matchID>&game=shelem`).
+
+The host starts after all seats are occupied. Players bid/pass, the declarer chooses trump, takes the kitty, discards four selected cards, then leads trump. Legal-card controls follow the authoritative server rules. Scoring, dealer rotation and cut-only redeals happen automatically. The score table shows cumulative match scores only, never live deal points. At match end the current player may start a fresh match.
+
+Rules are documented in `docs/shelem-rules.md`. Shelem's automated end-to-end checks pass; physical device, browser visual and hosted play validation remain manual follow-up.

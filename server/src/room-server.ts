@@ -4,15 +4,17 @@ import { Server } from "boardgame.io/server";
 import { Master } from "boardgame.io/master";
 import { SimpleCardGame } from "../../games/simple-card-game";
 import { WarGame } from "../../games/war-game";
+import { ShelemGame } from "../../games/shelem-game";
 import { CrazyEightsGame } from "../../games/crazy-eights-game";
 import { CustomCardGame } from "../../games/custom-card-game";
 import { PrivateStateSocketIO } from "./private-state-transport";
 import { readServerConfig, isAllowedOrigin } from "./config";
 import type { ServerOptions } from "socket.io";
 
-const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame, CustomCardGame];
+const registeredGames: Game<any>[] = [SimpleCardGame, WarGame, CrazyEightsGame, CustomCardGame, ShelemGame];
 const gamesByName = new Map(registeredGames.map(game => [game.name!, game]));
 const allowedMoves = new Map<string, Set<string>>([
+  [ShelemGame.name!, new Set(["bid", "passBid", "chooseTrump", "takeKitty", "discardCards", "playCard", "restartGame"])],
   [SimpleCardGame.name!, new Set(["drawCard", "restartGame"])],
   [WarGame.name!, new Set(["revealBattle", "restartGame"])],
   [CrazyEightsGame.name!, new Set(["playCard", "drawCard", "restartGame"])],

@@ -115,7 +115,14 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     tagged(turn.progression, "turn.progression", ["next-player"]);
     tagged(root.roundEnd, "roundEnd", ["external-completion"]);
     tagged(root.winner, "winner", ["deferred"]);
-    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores", "declarerSetup", "trickPlay"]);
+    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores", "declarerSetup", "trickPlay", "scoring"]);
+    if (Object.prototype.hasOwnProperty.call(auction, "scoring")) {
+      if (!auction.trickPlay) error("auction.scoring", "contradictory-rule", "Contract scoring requires trick play.");
+      const scoring = tagged(auction.scoring, "auction.scoring", ["contract-team-points"], ["cards", "trick", "discard", "total", "sweepMultiplier", "maximumContractMultiplier", "failureDoubleAt", "matchTarget", "merge", "simultaneousWin"]);
+      const points = object(scoring.cards, "auction.scoring.cards", ["5", "10", "A"]);
+      for (const [key, value] of Object.entries({ "5": 5, "10": 10, A: 10 })) choice(points[key], `auction.scoring.cards.${key}`, [value]);
+      for (const [key, value] of Object.entries({ trick: 5, discard: 5, total: 165, sweepMultiplier: 2, maximumContractMultiplier: 4, failureDoubleAt: 85, matchTarget: 1165, merge: "defenders-discard-declarers", simultaneousWin: "higher-score-tie-continues" })) choice(scoring[key], `auction.scoring.${key}`, [value]);
+    }
     if (Object.prototype.hasOwnProperty.call(auction, "trickPlay")) {
       if (!auction.declarerSetup) error("auction.trickPlay", "contradictory-rule", "Trick play requires declarer setup.");
       const trick = tagged(auction.trickPlay, "auction.trickPlay", ["follow-suit-trump"], ["firstLead", "rank", "nextLeader", "collection", "count"]);

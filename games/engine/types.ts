@@ -136,6 +136,21 @@ export interface AuctionDefinition {
     collection: "newest-trick-on-top";
     count: 12;
   };
+  scoring?: ContractScoringDefinition;
+}
+
+export interface ContractScoringDefinition {
+  type: "contract-team-points";
+  cards: { "5": 5; "10": 10; A: 10 };
+  trick: 5;
+  discard: 5;
+  total: 165;
+  sweepMultiplier: 2;
+  maximumContractMultiplier: 4;
+  failureDoubleAt: 85;
+  matchTarget: 1165;
+  merge: "defenders-discard-declarers";
+  simultaneousWin: "higher-score-tie-continues";
 }
 
 export interface ValidationError {

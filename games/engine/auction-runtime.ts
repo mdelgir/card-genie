@@ -2,6 +2,7 @@ import type { Card, Suit } from "./cards";
 import type { AuctionDefinition } from "./types";
 import type { GameRuntime, RoundState, RuntimeResult } from "./runtime";
 import { playTrickCard, trickView, type TrickState, type TrickView } from "./trick-runtime";
+import { scoreContract, matchWinner } from "./contract-scoring";
 
 /** Trusted source returns a cut offset, not a permutation or client argument. */
 export type Cut = (length: number) => number;
@@ -11,6 +12,7 @@ export interface CompletedDeal {
   cumulativeScores: { "0": number; "1": number };
 }
 export interface AuctionView {
+  matchWinner?: string | null;
   dealer: string;
   teams: Record<string, string>;
   scores: { "0": number; "1": number };
@@ -55,6 +57,25 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
     };
   };
   return {
+    advanceLifecycle(state, cut) {
+      const a = state.auction;
+      if (!a || state.roundStatus === "complete") return { ok: true, state };
+      if (a.phase === "redeal-required") return this.nextDeal!(state, cut);
+      if (a.phase !== "ready-scoring" || !rules.scoring) return { ok: true, state };
+      try {
+        if (Object.values(state.hands).some(hand => hand.length)) return fail("Hands must be empty before scoring.");
+        const completed = scoreContract(a, rules.scoring);
+        const next = structuredClone(state);
+        next.roundStatus = "complete";
+        const winner = matchWinner(completed.cumulativeScores, rules.scoring.matchTarget);
+        if (winner !== null) {
+          next.auction!.scores = completed.cumulativeScores;
+          next.auction!.matchWinner = winner;
+          return { ok: true, state: next };
+        }
+        return this.nextDeal!(next, cut, completed);
+      } catch { return fail("Unable to finalize contract deal."); }
+    },
     startRound(seats, shuffle) {
       if (!Array.isArray(seats) || seats.length !== 4 || new Set(seats).size !== 4 ||
           Array.from(seats).some(id => typeof id !== "string" || !id.trim())) {
@@ -195,6 +216,7 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
       return {
         deckCount: state.deck.length, hands: Object.fromEntries(state.playOrder.map(id =>
           [id, id === playerID ? state.hands[id].map(cardCopy) : []])),
+        ...(rules.scoring ? { handCounts: Object.fromEntries(state.playOrder.map(id => [id, state.hands[id].length])) } : {}),
         playOrder: [...state.playOrder], currentPlayer: state.currentPlayer,
         hasActed: Object.fromEntries(state.playOrder.map(id => [id, false])),
         roundStatus: state.roundStatus, revealed: false, winner: null,
@@ -204,6 +226,7 @@ export function createAuctionRuntime(rules: AuctionDefinition, standard: Card[])
           passed: [...a.passed], highBid: a.highBid, highBidder: a.highBidder,
           declarer: a.declarer, trump: a.trump, kittyCount: a.kitty.length,
           history: a.history.map(h => ({ playerID: h.playerID, bid: h.bid })),
+          ...(state.roundStatus === "complete" && a.matchWinner !== undefined ? { matchWinner: a.matchWinner } : {}),
           ...(a.tricks ? { tricks: trickView(a.tricks) } : {}),
           ...(a.discardStack ? { discardStack: {
             count: a.discardStack.cards.length, face: "down" as const,

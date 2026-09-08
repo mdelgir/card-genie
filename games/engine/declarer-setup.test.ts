@@ -36,7 +36,7 @@ test("declarer setup vocabulary validates closed data and legacy auction still w
     const result = validateGameDefinition({ ...shelemDefinition, auction: { ...shelemDefinition.auction, declarerSetup: setup } });
     assert.ok(!result.ok); assert.ok(result.errors.some(e => e.path.startsWith("auction.declarerSetup")));
   }
-  const { declarerSetup, trickPlay, ...legacyAuction } = shelemDefinition.auction;
+  const { declarerSetup, trickPlay, scoring, ...legacyAuction } = shelemDefinition.auction;
   const legacy = createGameRuntime({ ...shelemDefinition, auction: legacyAuction });
   assert.ok(legacy.ok);
   const s = ok(legacy.runtime.applyAction(won(), "1", { type: "choose-trump", suit: "clubs" }));

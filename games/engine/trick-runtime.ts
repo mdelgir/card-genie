@@ -16,6 +16,13 @@ export interface TrickState extends TrickView {
 const ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 const reject = (message: string): RuntimeResult => ({ ok: false, error: { code: "invalid-action", message } });
 
+/** Shared legal-card projection for controls; the server rechecks every move. */
+export function legalTrickIndices(hand: Card[], active: Contribution[], completed: number, trump: Card["suit"]): number[] {
+  const led = active[0]?.card.suit;
+  const required = !led && completed === 0 ? trump : led && hand.some(c => c.suit === led) ? led : null;
+  return hand.flatMap((card, index) => !required || card.suit === required ? [index] : []);
+}
+
 /** Caller has parsed the action and checked authenticated current-player identity. */
 export function playTrickCard(state: RoundState, playerID: string, index: unknown, rules: NonNullable<AuctionDefinition["trickPlay"]>): RuntimeResult {
   const a = state.auction!;

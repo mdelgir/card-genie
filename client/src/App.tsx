@@ -4,6 +4,8 @@ import { SocketIO } from "boardgame.io/multiplayer";
 import { LobbyClient } from "boardgame.io/client";
 import { useEffect, useMemo, useState } from "react";
 import { SimpleCardGame } from "@games/simple-card-game";
+import { ShelemGame } from "@games/shelem-game";
+import { ShelemBoard } from "./ShelemBoard";
 import { WarGame } from "@games/war-game";
 import { CrazyEightsGame } from "@games/crazy-eights-game";
 import { CustomCardGame } from "@games/custom-card-game";
@@ -18,6 +20,7 @@ import { useRoomSeats } from "./WaitingRoom";
 
 const HighestCardClient = Client({ game: SimpleCardGame, board: GameBoard,
   multiplayer: SocketIO({ server: serverUrl }), debug: false });
+const ShelemClient = Client({ game: ShelemGame, board: ShelemBoard, multiplayer: SocketIO({ server: serverUrl }), debug: false });
 const WarClient = Client({ game: WarGame, board: WarBoard,
   multiplayer: SocketIO({ server: serverUrl }), debug: false });
 const CrazyEightsClient = Client({ game: CrazyEightsGame, board: CrazyEightsBoard,
@@ -25,10 +28,10 @@ const CrazyEightsClient = Client({ game: CrazyEightsGame, board: CrazyEightsBoar
 const CustomGameClient = Client({ game: CustomCardGame, board: CustomGameBoard,
   multiplayer: SocketIO({ server: serverUrl }), debug: false });
 
-type GameName = "simple-card-game" | "war" | "crazy-eights" | "custom-card-game";
+type GameName = "shelem" | "simple-card-game" | "war" | "crazy-eights" | "custom-card-game";
 const parseGame = (value: string | null): GameName =>
-  value === "war" || value === "crazy-eights" || value === "custom-card-game" ? value : "simple-card-game";
-const gameLabel = (game: GameName) => game === "war" ? "War" : game === "crazy-eights" ? "Crazy Eights" :
+  value === "shelem" || value === "war" || value === "crazy-eights" || value === "custom-card-game" ? value : "simple-card-game";
+const gameLabel = (game: GameName) => game === "shelem" ? "Shelem" : game === "war" ? "War" : game === "crazy-eights" ? "Crazy Eights" :
   game === "custom-card-game" ? "Custom Game" : "Highest Card";
 
 export default function App() {
@@ -47,7 +50,7 @@ export default function App() {
   const { seats, error: seatsError } = useRoomSeats(serverUrl, joined || creatorOpen ? "" : matchID, gameName);
   const [roomQr, setRoomQr] = useState<string | null>(null);
   const lobbyClient = useMemo(() => new LobbyClient({ server: serverUrl }), []);
-  const ActiveGameClient = gameName === "war" ? WarClient : gameName === "crazy-eights" ? CrazyEightsClient :
+  const ActiveGameClient = gameName === "shelem" ? ShelemClient : gameName === "war" ? WarClient : gameName === "crazy-eights" ? CrazyEightsClient :
     gameName === "custom-card-game" ? CustomGameClient : HighestCardClient;
   const maxPlayers = gameName === "crazy-eights" ? 4 : 8;
 
@@ -70,7 +73,7 @@ export default function App() {
     setError(null);
     try {
       setBusy(true);
-      const players = gameName === "war" ? 2 : numPlayers;
+      const players = gameName === "shelem" ? 4 : gameName === "war" ? 2 : numPlayers;
       const response = await fetch(`${serverUrl}/games/${gameName}/create`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ numPlayers: players, setupData: { hostName: playerName.trim() } }),
@@ -115,7 +118,8 @@ export default function App() {
   const selectGame = (value: string) => {
     const next = parseGame(value);
     setGameName(next); setPlayerID("");
-    if (next === "war") setNumPlayers(2);
+    if (next === "shelem") setNumPlayers(4);
+    else if (next === "war") setNumPlayers(2);
     else if (next === "crazy-eights" && numPlayers > 4) setNumPlayers(4);
   };
   const playerCountValid = gameName === "war" || gameName === "custom-card-game" ||
@@ -137,6 +141,7 @@ export default function App() {
         <label htmlFor="game">Game
           <select id="game" value={gameName} onChange={event => selectGame(event.target.value)}>
             <option value="simple-card-game">Highest Card</option>
+            <option value="shelem">Shelem</option>
             <option value="war">War</option>
             <option value="crazy-eights">Crazy Eights</option>
             <option value="custom-card-game">Custom Game</option>
@@ -157,7 +162,7 @@ export default function App() {
             </option>)}
           </select>
         </label>
-        {gameName === "war" ? <p>War uses exactly 2 players.</p> : gameName !== "custom-card-game" && <label htmlFor="numPlayers">Number of players
+        {gameName === "shelem" ? <p>Shelem uses exactly 4 players.</p> : gameName === "war" ? <p>War uses exactly 2 players.</p> : gameName !== "custom-card-game" && <label htmlFor="numPlayers">Number of players
           <input id="numPlayers" type="number" min={2} max={maxPlayers} value={numPlayers}
             onChange={event => setNumPlayers(Number(event.target.value))} />
         </label>}

@@ -123,7 +123,7 @@ test("auction views exclude kitty, other hands, cuts and live totals; actions ne
   const before = structuredClone(s);
   for (const id of ["0", "1", "2", "3", null, undefined, "unknown"]) {
     const v = runtime.playerView(secret, id);
-    assert.deepEqual(Object.keys(v).sort(), ["deckCount", "hands", "playOrder", "currentPlayer", "hasActed", "roundStatus", "revealed", "winner", "auction"].sort());
+    assert.deepEqual(Object.keys(v).sort(), ["deckCount", "hands", "handCounts", "playOrder", "currentPlayer", "hasActed", "roundStatus", "revealed", "winner", "auction"].sort());
     assert.deepEqual(Object.keys(v.auction!).sort(), ["dealer", "teams", "scores", "phase", "passed", "highBid", "highBidder", "declarer", "trump", "kittyCount", "history"].sort());
     for (const seat of s.playOrder) assert.deepEqual(v.hands[seat], seat === id ? s.hands[seat] : []);
     assert.equal(v.auction!.kittyCount, 4);

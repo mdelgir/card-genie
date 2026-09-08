@@ -75,6 +75,8 @@ const copyWinner = (winner: Winner): Winner => winner === null ? null :
   winner.type === "tie" ? { type: "tie" } : { type: "player", playerID: winner.playerID };
 
 export interface GameRuntime {
+  /** Trusted post-move transitions; callers must never expose its cut source to clients. */
+  advanceLifecycle?(state: RoundState, cut: Cut): RuntimeResult;
   /** Trusted server lifecycle only, never a player action. */
   nextDeal?(state: RoundState, cut: Cut, completed?: CompletedDeal): RuntimeResult;
   startRound(playerIDs: readonly string[], shuffle: Shuffle): RuntimeResult;

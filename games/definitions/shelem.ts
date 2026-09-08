@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Through twelve tricks; scoring is not implemented yet. */
+/** Complete four-seat contract game using validated generic primitives. */
 export const shelemDefinition = {
   schemaVersion: 1, id: "shelem", name: "Shelem", players: { min: 4, max: 4 },
   setup: { deck: "standard-52", roundStart: { type: "shuffle" } },
@@ -18,5 +18,10 @@ export const shelemDefinition = {
       next: "declarer-leads",
     },
     trickPlay: { type: "follow-suit-trump", firstLead: "trump", rank: "ace-high", nextLeader: "winner", collection: "newest-trick-on-top", count: 12 },
+    scoring: {
+      type: "contract-team-points", cards: { "5": 5, "10": 10, A: 10 }, trick: 5, discard: 5, total: 165,
+      sweepMultiplier: 2, maximumContractMultiplier: 4, failureDoubleAt: 85, matchTarget: 1165,
+      merge: "defenders-discard-declarers", simultaneousWin: "higher-score-tie-continues",
+    },
   },
 } satisfies GameDefinition;
