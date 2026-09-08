@@ -135,6 +135,22 @@ Core principle:
 
 Clients may render available actions, but they must not independently decide legality, hidden information, outcomes, or canonical state transitions.
 
+#### Generic table zones and card placements
+
+Games may place cards on a shared table without immediately revealing or transferring them. The definition/runtime must model this as game state rather than a War-specific visual trick.
+
+For any supported placement primitive, keep these concepts distinct:
+
+- logical table `zone` (for example battle, discard, meld, trick),
+- `face` state (`up` or `down`),
+- current rules ownership (`placer` or neutral/unowned where supported),
+- placement attribution (who put the card there, independently of ownership),
+- placement sequence/group so a client can reconstruct the physical order of a multi-step action.
+
+The authoritative server may retain a face-down card identity, but every player/spectator view must replace that identity with an opaque face-down placement while preserving only the public zone/ownership/attribution/sequence metadata. UI code chooses how to render that state (individual backs, a stack, count badge, etc.); it must not infer hidden card identities or invent rule semantics.
+
+War is the first concrete proof: a tied battle must visibly represent each player's three face-down war cards between the tied reveal and the next face-up reveal, while those hidden card identities remain absent from network-visible state. The same placement model should be reusable by future games instead of adding per-game hidden-pile fields.
+
 ### Phase 2C — Prove the abstraction with real games
 
 Before building a public game-creator UI, prove the engine with multiple games that stress different mechanics.
@@ -144,7 +160,7 @@ Before building a public game-creator UI, prove the engine with multiple games t
    - Use it as the compatibility baseline.
 
 2. **War**
-   - Exercise repeated rounds, comparisons, piles, ties, and continuing play.
+   - Exercise repeated rounds, comparisons, piles, ties, continuing play, and generic face-up/face-down table placements.
 
 3. **Crazy Eights**
    - Exercise persistent hands, conditional legal-card rules, draw/play choices, changing public state, and a nontrivial win condition.
@@ -164,6 +180,7 @@ Game name
   -> turn actions
   -> legal-card conditions
   -> public/private visibility
+  -> table zones / placement ownership
   -> round-end condition
   -> winner/scoring
   -> preview
@@ -209,13 +226,14 @@ Phase 2 is successful when:
 1. A versioned `GameDefinition` schema exists and is validated.
 2. The generic runtime executes definitions authoritatively without client-side rule trust.
 3. Highest Card, War, and Crazy Eights can run through the same engine without game-specific transport or UI architecture forks.
-4. Privacy rules remain enforced for configurable games.
-5. Users can create a supported game through a guided UI without writing code.
-6. Saved definitions can be loaded and played across the same online/LAN session model.
-7. Natural-language assistance, if introduced, produces validated definitions rather than executable code.
+4. Privacy rules remain enforced for configurable games, including face-down cards placed in public table zones.
+5. Public table placements can preserve public ownership/attribution/ordering without exposing hidden identities.
+6. Users can create a supported game through a guided UI without writing code.
+7. Saved definitions can be loaded and played across the same online/LAN session model.
+8. Natural-language assistance, if introduced, produces validated definitions rather than executable code.
 
 ## Later direction
 
-After several hand-written and configurable games prove the shared abstractions, expand the rule vocabulary gradually. Potential later areas include richer scoring, teams, bidding, trick-taking, multi-round matches, custom zones/piles, and more expressive conditions.
+After several hand-written and configurable games prove the shared abstractions, expand the rule vocabulary gradually. Potential later areas include richer scoring, teams, bidding, trick-taking, multi-round matches, additional custom zones/piles, and more expressive conditions.
 
 Do not broaden the DSL or runtime speculatively. Add primitives in response to concrete games and keep compatibility through explicit schema versioning and migrations.
