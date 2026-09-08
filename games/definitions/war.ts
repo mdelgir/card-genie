@@ -1,6 +1,6 @@
 import type { GameDefinition } from "../engine/types";
 
-/** Executable by the generic runtime; not yet registered in the playable app. */
+/** Executable by the generic runtime and playable through the War adapter. */
 export const warDefinition = {
   schemaVersion: 1,
   id: "war",
@@ -22,6 +22,7 @@ export const warDefinition = {
   battle: {
     type: "compare-contributions", comparison: "compare-rank", direction: "highest-wins", ace: "high",
     collect: { type: "append-pot", order: "contribution-order" },
+    table: { zone: "battle", ownership: "neutral", attribution: "placer" },
     ties: { type: "repeat-contribution", faceDown: 3, faceUp: 1, insufficient: "lose", bothInsufficient: "tie" },
   },
   roundEnd: { type: "all-cards-owned" },
