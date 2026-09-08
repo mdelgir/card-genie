@@ -27,6 +27,7 @@ export function GameCreator({ onClose, onTest }: {
   const [copied, setCopied] = useState(false);
   const [testPlayers, setTestPlayers] = useState(2);
   const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
 
   const definition = useMemo(() => buildCreatorDefinition(draft), [draft]);
   const validation = useMemo(() => validateGameDefinition(definition), [definition]);
@@ -40,9 +41,11 @@ export function GameCreator({ onClose, onTest }: {
     setTestPlayers(next.minPlayers);
     setIdTouched(false);
     setCopied(false);
+    setTestError(null);
   };
   const changeName = (name: string) => {
     setDraft(current => ({ ...current, name, id: idTouched ? current.id : slug(name) }));
+    setTestError(null);
   };
   const copyDefinition = async () => {
     try {
@@ -56,8 +59,14 @@ export function GameCreator({ onClose, onTest }: {
   const testGame = async () => {
     if (!validation.ok || !testPlayerValid) return;
     setTesting(true);
-    try { await onTest(validation.definition, testPlayers); }
-    finally { setTesting(false); }
+    setTestError(null);
+    try {
+      await onTest(validation.definition, testPlayers);
+    } catch (error) {
+      setTestError(error instanceof Error ? error.message : "Unable to create the custom test room.");
+    } finally {
+      setTesting(false);
+    }
   };
 
   return <section className="creator" aria-labelledby="creator-title">
@@ -83,17 +92,17 @@ export function GameCreator({ onClose, onTest }: {
         <fieldset className="creator-panel creator-grid">
           <legend>2. Identity</legend>
           <label>Game name<input value={draft.name} maxLength={100} onChange={event => changeName(event.target.value)} /></label>
-          <label>Game ID<input value={draft.id} maxLength={64} onChange={event => { setIdTouched(true); patch({ id: event.target.value }); }} />
+          <label>Game ID<input value={draft.id} maxLength={64} onChange={event => { setIdTouched(true); setTestError(null); patch({ id: event.target.value }); }} />
             <small>Lowercase kebab-case, used by saved definitions later.</small></label>
         </fieldset>
 
         {draft.family === "draw-compare" && <fieldset className="creator-panel creator-grid">
           <legend>3. Players & outcome</legend>
           <label>Minimum players<input type="number" min={2} max={8} value={draft.minPlayers}
-            onChange={event => patch({ minPlayers: Number(event.target.value) })} /></label>
+            onChange={event => { setTestError(null); patch({ minPlayers: Number(event.target.value) }); }} /></label>
           <label>Maximum players<input type="number" min={2} max={8} value={draft.maxPlayers}
-            onChange={event => patch({ maxPlayers: Number(event.target.value) })} /></label>
-          <label>Winner<select value={draft.rankWinner} onChange={event => patch({ rankWinner: event.target.value as CreatorDraft["rankWinner"] })}>
+            onChange={event => { setTestError(null); patch({ maxPlayers: Number(event.target.value) }); }} /></label>
+          <label>Winner<select value={draft.rankWinner} onChange={event => { setTestError(null); patch({ rankWinner: event.target.value as CreatorDraft["rankWinner"] }); }}>
             <option value="highest-wins">Highest rank wins</option><option value="lowest-wins">Lowest rank wins</option>
           </select></label>
           <p className="creator-note">Fixed by this rule family: standard 52-card deck, shuffle, one private draw per player, ace high, reveal after everyone acts, ties allowed.</p>
@@ -101,14 +110,14 @@ export function GameCreator({ onClose, onTest }: {
 
         {draft.family === "paired-battle" && <fieldset className="creator-panel creator-grid">
           <legend>3. Battle table</legend>
-          <label>Table zone<input value={draft.tableZone} maxLength={32} onChange={event => patch({ tableZone: event.target.value })} />
+          <label>Table zone<input value={draft.tableZone} maxLength={32} onChange={event => { setTestError(null); patch({ tableZone: event.target.value }); }} />
             <small>Lowercase kebab-case. The renderer can present each zone differently later.</small></label>
           <label>Ownership while on table<select value={draft.tableOwnership}
-            onChange={event => patch({ tableOwnership: event.target.value as CreatorDraft["tableOwnership"] })}>
+            onChange={event => { setTestError(null); patch({ tableOwnership: event.target.value as CreatorDraft["tableOwnership"] }); }}>
             <option value="neutral">Neutral pot</option><option value="placer">Remains owned by placer</option>
           </select></label>
           <label>Remember who placed it<select value={draft.tableAttribution}
-            onChange={event => patch({ tableAttribution: event.target.value as CreatorDraft["tableAttribution"] })}>
+            onChange={event => { setTestError(null); patch({ tableAttribution: event.target.value as CreatorDraft["tableAttribution"] }); }}>
             <option value="placer">Yes</option><option value="none">No</option>
           </select></label>
           <p className="creator-note">Fixed by this v0 family: exactly 2 players, 26-card piles, high card wins, 3 face-down + 1 face-up on ties, insufficient cards lose.</p>
@@ -122,11 +131,12 @@ export function GameCreator({ onClose, onTest }: {
         <fieldset className="creator-panel creator-test-row">
           <legend>4. Test play</legend>
           <label>Players<input type="number" min={definition.players.min} max={definition.players.max} value={testPlayers}
-            onChange={event => setTestPlayers(Number(event.target.value))} /></label>
+            onChange={event => { setTestError(null); setTestPlayers(Number(event.target.value)); }} /></label>
           <button type="button" onClick={testGame} disabled={!validation.ok || !testPlayerValid || testing}>
             {testing ? "Creating test room…" : "Create test room"}
           </button>
           <small>Runs this exact validated definition through the generic authoritative server adapter.</small>
+          {testError && <p className="error" role="alert">{testError}</p>}
         </fieldset>
 
         <div className={`creator-validation ${validation.ok ? "creator-validation--ok" : "creator-validation--error"}`} role="status">
