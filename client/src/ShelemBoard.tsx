@@ -128,11 +128,13 @@ export function ShelemBoard({ G, ctx, moves, playerID, matchID, credentials, mat
       <small>{handOrderMode === "sorted" ? "Grouped by suit · Ace high" : "Manual order"} · Drag cards to rearrange</small>
     </div></div><div className={`shelem-hand shelem-hand--${handLayout}`}>{displayedHand.map(({ key, serverIndex, card }, position) => {
       const selectable = a.phase === "discard" ? selected.includes(serverIndex) || selected.length < 4 : isPlay && legal.includes(serverIndex);
+      const actionDisabled = !mine || !selectable;
       return <div key={key} data-hand-key={key} className={`shelem-hand-card${draggingKey === key ? " shelem-hand-card--dragging" : ""}`}
         style={{ zIndex: draggingKey === key ? 100 : position + 1 }} onPointerDown={event => beginDrag(key, event)} onPointerMove={continueDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
-        <button aria-pressed={a.phase === "discard" ? selected.includes(serverIndex) : undefined} aria-label={`${card.rank} of ${card.suit}`} disabled={!mine || !selectable}
+        <button aria-pressed={a.phase === "discard" ? selected.includes(serverIndex) : undefined} aria-disabled={actionDisabled} aria-label={`${card.rank} of ${card.suit}`}
           onClick={() => {
             if (suppressClickRef.current === key) { suppressClickRef.current = null; return; }
+            if (actionDisabled) return;
             if (a.phase === "discard") setSelected(current => current.includes(serverIndex) ? current.filter(n => n !== serverIndex) : [...current, serverIndex]);
             else moves.playCard(serverIndex);
           }}><PlayingCard variant="face" card={card} size="small" /></button>
