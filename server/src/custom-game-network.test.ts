@@ -36,8 +36,9 @@ test("custom game rooms validate definitions and preserve private state over Soc
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ numPlayers: 2, setupData: { hostName: "Host", definition } }),
     });
-    assert.equal(created.status, 200);
-    const { matchID, playerCredentials: hostCredentials } = await created.json() as {
+    const createdText = await created.text();
+    assert.equal(created.status, 200, createdText);
+    const { matchID, playerCredentials: hostCredentials } = JSON.parse(createdText) as {
       matchID: string; playerCredentials: string;
     };
     const guest = await lobby.joinMatch("custom-card-game", matchID, { playerID: "1", playerName: "Guest" });
