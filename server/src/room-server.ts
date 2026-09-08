@@ -62,9 +62,18 @@ export function createCardGenieServer(config = readServerConfig()) {
     if (ctx.method === "POST" && create && gamesByName.has(create[1])) {
       // Game setup runs inside boardgame.io's create route, after its JSON parser.
       // CustomCardGame.setup validates the submitted definition and player range
-      // before any match is stored. Reading ctx.request.body here *before* next()
-      // would run before that parser and incorrectly see an undefined definition.
-      await next();
+      // before any match is stored. Convert those validation exceptions to 400s.
+      try {
+        await next();
+      } catch (error) {
+        if (create[1] === CustomCardGame.name && error instanceof Error &&
+            (error.message.startsWith("Invalid custom game definition:") || error.message.startsWith("Custom game requires "))) {
+          ctx.status = 400;
+          ctx.body = error.message;
+          return;
+        }
+        throw error;
+      }
       if (ctx.status !== 200) return;
       const { matchID } = ctx.body as { matchID: string };
       const { metadata } = await server.db.fetch(matchID, { metadata: true });
