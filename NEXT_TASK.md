@@ -1,15 +1,20 @@
-# Next Task — Shelem declarer setup
+# Next Task — Shelem trick play
 
-Read `docs/shelem-rules.md` and the existing Shelem auction foundation first.
+Read `docs/shelem-rules.md` and the existing Shelem auction/declarer-setup runtime first.
 
-Implement the smallest generic/data-only slice from **trump chosen** to **ready for trick play**:
-- declarer takes the 4-card kitty into their private hand (12 -> 16); kitty identities stay private;
-- declarer must choose exactly 4 owned cards to place face down into their team collection pile, preserving deterministic order for later deck reconstruction;
-- expose that discard only as a public opaque 4-card face-down stack/count with declarer/team attribution; never expose identities;
-- after discard, declarer has 12 cards, contract/trump remain public, and state becomes ready for trick play with declarer as first leader;
-- reject wrong-player, wrong-phase, duplicate/invalid-card, or wrong-count actions without mutation;
-- keep public cumulative team scores frozen at deal start and do not expose current-deal totals.
+Implement the smallest generic/data-only slice from **ready for trick play** through **12 completed tricks, ready for scoring**:
+- declarer leads trick 1 and must lead trump;
+- thereafter each trick winner leads the next trick;
+- four players act in rightward seat order from the leader;
+- must follow led suit when possible; if void, any card is legal;
+- trump beats non-trump; otherwise highest led-suit card wins; Ace high;
+- each played card is public while the trick is active;
+- after 4 cards, determine winner authoritatively and move the ordered trick onto that winner team’s hidden collection pile, with each later won trick stacked on top while preserving card/play order for exact future deck reconstruction;
+- public/player views may expose trick winner and team trick counts, but must not expose identities from already-collected piles or any computed/live current-deal point totals;
+- after 12 tricks, all player hands are empty and state becomes ready for deal scoring; do not yet modify cumulative scores or rotate dealer.
 
-Do not implement trick play, trick scoring, deal scoring, match end, or Shelem UI yet. No game-id branching or executable user rules.
+Reject wrong player/phase, cards not owned, and follow-suit violations without mutation. Preserve contract, trump, declarer discard stack, frozen cumulative scores, and 52-card conservation.
 
-Add focused validator/runtime/privacy tests, keep all existing games/tests green, update `ledger.md`, commit, and stop.
+Do not implement deal scoring, match end, next-deal pile merge/cut, or Shelem UI yet. No game-id branching or executable user rules.
+
+Add focused validator/runtime/privacy/order/conservation tests, keep all existing games/tests green, update `ledger.md`, commit, and stop.
