@@ -23,7 +23,7 @@
 .shelem-hand-card--dragging { transform:translateY(-8px) scale(1.02); filter:drop-shadow(0 8px 8px #0004); }
 .shelem-hand-card > button { display:block; padding:.2rem; background:transparent; border:2px solid transparent; border-radius:.65rem; }
 .shelem-hand-card > button[aria-pressed="true"] { border-color:#a66e0d; transform:translateY(-5px); }
-.shelem-hand-card > button:disabled { opacity:.6; }
+.shelem-hand-card > button[aria-disabled="true"] { opacity:.6; }
 .shelem-hand--stacked .shelem-hand-card + .shelem-hand-card { margin-left:-68px; }
 .shelem-hand--stacked .shelem-hand-card:hover,.shelem-hand--stacked .shelem-hand-card:focus-within { transform:translateY(-7px); }
 .shelem-hand--stacked .shelem-hand-card--dragging { transform:translateY(-10px) scale(1.02); }
