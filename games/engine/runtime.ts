@@ -1,6 +1,7 @@
 import type { Card, Rank, Suit } from "./cards";
 import type { ValidationError } from "./types";
 import { validateGameDefinition } from "./validator";
+import { createAuctionRuntime, type AuctionState, type AuctionView, type Cut, type CompletedDeal } from "./auction-runtime";
 
 /** Trusted server randomness: return a permutation of the supplied indices.
  * Called for the deck, then seats only with random ordering. No random state is stored.
@@ -30,6 +31,7 @@ export interface BattleState {
   result: Winner;
 }
 export interface RoundState {
+  auction?: AuctionState;
   deck: Card[];
   hands: Record<string, Card[]>;
   playOrder: string[];
@@ -43,6 +45,7 @@ export interface RoundState {
   activeSuit?: Suit;
 }
 export interface RoundView {
+  auction?: AuctionView;
   deckCount: number;
   hands: Record<string, Card[]>;
   playOrder: string[];
@@ -72,6 +75,8 @@ const copyWinner = (winner: Winner): Winner => winner === null ? null :
   winner.type === "tie" ? { type: "tie" } : { type: "player", playerID: winner.playerID };
 
 export interface GameRuntime {
+  /** Trusted server lifecycle only, never a player action. */
+  nextDeal?(state: RoundState, cut: Cut, completed?: CompletedDeal): RuntimeResult;
   startRound(playerIDs: readonly string[], shuffle: Shuffle): RuntimeResult;
   applyAction(state: RoundState, playerID: string | null, action: unknown): RuntimeResult;
   playerView(state: RoundState, playerID?: string | null): RoundView;
@@ -82,6 +87,8 @@ export function createGameRuntime(input: unknown):
   const validation = validateGameDefinition(input);
   if (!validation.ok) return validation;
   const definition = structuredClone(validation.definition);
+  if (definition.auction) return { ok: true, runtime: createAuctionRuntime(definition.auction,
+    suits.flatMap(suit => ranks.map((rank, index) => ({ suit, rank, value: index + 2 })))) };
   const actionCount = "count" in definition.turn.action ? definition.turn.action.count : 0;
   const permute = <T>(items: T[], shuffle: Shuffle): T[] => {
     const indices = shuffle(items.map((_, index) => index));

@@ -81,7 +81,7 @@ export function validateGameDefinition(input: unknown): ValidationResult {
     return result;
   };
 
-  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner", "battle", "handPlay"]);
+  const root = object(input, "", ["schemaVersion", "id", "name", "players", "setup", "visibility", "turn", "roundEnd", "winner", "battle", "handPlay", "auction"]);
   choice(root.schemaVersion, "schemaVersion", [1], "unsupported-version");
   if (typeof root.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(root.id) || root.id.length > 64) {
     error("id", "invalid-value", "Expected a lowercase kebab-case identifier of 1–64 characters.");
@@ -98,6 +98,34 @@ export function validateGameDefinition(input: unknown): ValidationResult {
 
   const paired = Object.prototype.hasOwnProperty.call(root, "battle");
   const matching = Object.prototype.hasOwnProperty.call(root, "handPlay");
+  if (Object.prototype.hasOwnProperty.call(root, "auction")) {
+    if (paired || matching) error("auction", "contradictory-rule", "Auction cannot be combined with battle or matching-discard rules.");
+    if (players.min !== 4 || players.max !== 4) error("players", "contradictory-rule", "Opposite-seat auction requires exactly four seats.");
+    const setup = object(root.setup, "setup", ["deck", "roundStart"]);
+    choice(setup.deck, "setup.deck", ["standard-52"]);
+    tagged(setup.roundStart, "setup.roundStart", ["shuffle"]);
+    const visibility = object(root.visibility, "visibility", ["deck", "hand", "reveal"]);
+    choice(visibility.deck, "visibility.deck", ["server-only"]);
+    choice(visibility.hand, "visibility.hand", ["owner-only"]);
+    const reveal = tagged(visibility.reveal, "visibility.reveal", ["reveal"], ["when"]);
+    choice(reveal.when, "visibility.reveal.when", ["never"]);
+    const turn = object(root.turn, "turn", ["order", "action", "progression"]);
+    choice(turn.order, "turn.order", ["seat-order"]);
+    tagged(turn.action, "turn.action", ["bid-or-pass"]);
+    tagged(turn.progression, "turn.progression", ["next-player"]);
+    tagged(root.roundEnd, "roundEnd", ["external-completion"]);
+    tagged(root.winner, "winner", ["deferred"]);
+    const auction = tagged(root.auction, "auction", ["ascending-bid"], ["min", "max", "step", "pass", "openingPasses", "trump", "teams", "direction", "dealer", "preparation", "packet", "scores"]);
+    const values = { min: 100, max: 165, step: 5, pass: "permanent", openingPasses: 3,
+      trump: "choose-suit", teams: "opposite-seats", direction: "right", dealer: "rotate-after-completed-deal",
+      preparation: "shuffle-first-cut-later", scores: "frozen-at-deal-start" };
+    for (const [key, value] of Object.entries(values)) choice(auction[key], `auction.${key}`, [value], "unsupported-rule");
+    const packet = object(auction.packet, "auction.packet", ["hand", "kitty", "kittyBefore"]);
+    choice(packet.hand, "auction.packet.hand", [12]);
+    choice(packet.kitty, "auction.packet.kitty", [4]);
+    choice(packet.kittyBefore, "auction.packet.kittyBefore", ["dealer"]);
+    return errors.length ? { ok: false, errors } : { ok: true, definition: input as GameDefinition };
+  }
   if (paired && matching) error("handPlay", "contradictory-rule", "Battle and persistent-hand play modes cannot be combined in v0.");
 
   const setupKeys = ["deck", "roundStart",

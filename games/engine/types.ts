@@ -17,12 +17,12 @@ export interface VisibilityDefinition {
   handCount?: "public";
   discard?: "top-public";
   /** contribution exposes battle cards; discard exposes cards when played. */
-  reveal: { type: "reveal"; when: "round-end" | "contribution" | "discard" };
+  reveal: { type: "reveal"; when: "round-end" | "contribution" | "discard" | "never" };
 }
 
 export type TurnActionDefinition =
   | { type: "draw" | "reveal-top"; count: number }
-  | { type: "play-or-draw" };
+  | { type: "play-or-draw" | "bid-or-pass" };
 
 export interface TurnDefinition {
   /** random shuffles seats each round; seat-order preserves supplied seat order. */
@@ -36,14 +36,14 @@ export interface TurnDefinition {
   progression: { type: "next-player" | "next-battle" };
 }
 
-export type ConditionDefinition = { type: "all-players-acted" | "all-cards-owned" | "empty-hand" };
+export type ConditionDefinition = { type: "all-players-acted" | "all-cards-owned" | "empty-hand" | "external-completion" };
 
 export type WinnerDefinition = {
   type: "highest-wins" | "lowest-wins";
   comparison: "compare-rank";
   ace: "high";
   ties: "tie";
-} | { type: "all-cards-owner" } | { type: "first-empty-hand" };
+} | { type: "all-cards-owner" } | { type: "first-empty-hand" } | { type: "deferred" };
 
 /** Public-table placement policy for cards contributed during a battle.
  * Face-up/down comes from the contribution rule itself. Ownership is separate
@@ -98,6 +98,28 @@ export interface GameDefinition {
   winner: WinnerDefinition;
   battle?: BattleDefinition;
   handPlay?: HandPlayDefinition;
+  auction?: AuctionDefinition;
+}
+
+/** Closed foundation vocabulary; seat array order proceeds to the right.
+ * Packet order: three hands, kitty, dealer hand. Initial dealer is seat zero.
+ * Later completed-deal stacks are supplied by trusted server lifecycle code;
+ * this slice deliberately does not gather tricks or calculate scores.
+ */
+export interface AuctionDefinition {
+  type: "ascending-bid";
+  min: 100;
+  max: 165;
+  step: 5;
+  pass: "permanent";
+  openingPasses: 3;
+  trump: "choose-suit";
+  teams: "opposite-seats";
+  direction: "right";
+  dealer: "rotate-after-completed-deal";
+  preparation: "shuffle-first-cut-later";
+  packet: { hand: 12; kitty: 4; kittyBefore: "dealer" };
+  scores: "frozen-at-deal-start";
 }
 
 export interface ValidationError {

@@ -81,3 +81,12 @@
 - Added real SocketIO coverage proving malformed definitions reject and private custom state stays absent from player/spectator payloads.
 - Repaired CI test discovery so both `games/*.test.ts` and nested game tests run; this exposed and fixed a dormant Crazy Eights adapter-test syntax error. The expanded suite and both builds are green.
 - Manual Creator-created room validation remains the next gate before persistence/save/share work.
+
+### 2026-09-07 — Shelem auction foundation
+
+- Added a validated data-only ascending-auction definition with opposite-seat teams, rightward seat-array order, initial seat-zero dealer, 12/12/12 + 4-card kitty + dealer's 12 packet dealing, permanent passes, 100–165 bids in strictly increasing multiples of five, and declarer-only trump selection. Generic runtime dispatch uses the auction primitive, never game id.
+- Added a separate auction runtime module behind createGameRuntime. First setup uses injected shuffle once. Three opening passes mark redeal-required; trusted nextDeal cuts the exactly reconstructed packet stack and retains the dealer. Cut offsets must be integer cyclic rotations; no later shuffle hook is offered.
+- nextDeal can also consume a trusted completed-deal stack and cumulative score snapshot, rotating the dealer exactly one seat right only when roundStatus is complete. Tests simulate this future authoritative completion boundary; this task does not implement trick gathering, scoring, or any player-accessible completion action. Choosing trump stops at ready and does not complete the deal or move the kitty.
+- Player views expose only their own hand plus allowlisted public auction/dealer/team/kitty-count metadata and frozen deal-start cumulative scores. Spectators receive no card identities. Kitty, cut points, arbitrary private fields and live deal totals are excluded. Views copy nested data; rejected actions preserve state and do not invoke getters.
+- Validation: npm run build:server, npm run build:client, and npm test pass (77 tests). Six new focused tests cover definition round-trip/rejections, packet position/card conservation, same-dealer cyclic redeals, bid/pass/trump legality, trusted completed-stack continuity/dealer rotation, frozen scores and player/spectator privacy. All 71 existing tests remain green.
+- No Shelem UI or playable registration, kitty pickup/discard, trick play, scoring or match-end implementation. No Shelem browser/hosted validation claimed. Stopped at the auction foundation; further play remains a separate task.
